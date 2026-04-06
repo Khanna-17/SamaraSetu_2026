@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
+import socket from "../lib/socket";
 import ParticleBackground from "../components/ParticleBackground";
 import GlassCard from "../components/GlassCard";
 import NeonButton from "../components/NeonButton";
@@ -10,11 +11,33 @@ export default function EntryPage() {
   const [form, setForm] = useState({ name: "", rollNumber: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [contestState, setContestState] = useState({ mode: "live", message: "Contest is live." });
   const navigate = useNavigate();
+
+  useEffect(() => {
+    api.get("/contest-state").then(({ data }) => {
+      setContestState(data.contestState || { mode: "live", message: "Contest is live." });
+    }).catch(() => {});
+
+    socket.connect();
+    const onContestStateUpdated = (nextState) => {
+      setContestState(nextState);
+    };
+    socket.on("contest-state-updated", onContestStateUpdated);
+
+    return () => {
+      socket.off("contest-state-updated", onContestStateUpdated);
+    };
+  }, []);
 
   async function onSubmit(event) {
     event.preventDefault();
     setError("");
+
+    if (contestState.mode !== "live") {
+      setError(contestState.message || "Contest is not accepting entries right now.");
+      return;
+    }
 
     if (!form.name.trim() || !form.rollNumber.trim()) {
       setError("Both fields are required.");
@@ -49,6 +72,9 @@ export default function EntryPage() {
             <p className="mb-2 text-xs uppercase tracking-[0.25em] text-amber-400">Code Translation Arena</p>
             <h1 className="font-display text-4xl leading-tight text-amber-100 md:text-5xl">Translate Python. Beat the clock. Top the board.</h1>
             <p className="mt-4 text-slate-300">Take on multiple Python challenges, translate them into your target language, and get scored with hidden tests plus AI feedback.</p>
+            <p className={`mt-4 rounded-2xl border px-4 py-3 text-sm ${contestState.mode === "live" ? "border-amber-300/25 bg-amber-100/5 text-amber-100" : "border-red-900/50 bg-red-950/30 text-red-200"}`}>
+              {contestState.message || "Contest status updated."}
+            </p>
 
             <form className="mt-8 space-y-4" onSubmit={onSubmit}>
               <label className="block text-sm text-amber-100">
@@ -73,7 +99,7 @@ export default function EntryPage() {
               {error ? <p className="text-sm text-rose-300">{error}</p> : null}
 
               <div className="flex flex-wrap gap-3 pt-2">
-                <NeonButton type="submit" disabled={loading}>{loading ? "Entering..." : "Enter Arena"}</NeonButton>
+                <NeonButton type="submit" disabled={loading || contestState.mode !== "live"}>{loading ? "Entering..." : "Enter Arena"}</NeonButton>
                 <NeonButton type="button" className="border-red-800/60 bg-red-900/20 text-amber-100 hover:bg-red-900/35" onClick={() => navigate("/admin")}>Admin</NeonButton>
               </div>
             </form>
@@ -84,11 +110,11 @@ export default function EntryPage() {
           <GlassCard className="h-full space-y-4">
             <h2 className="font-display text-2xl text-amber-100">Before You Start</h2>
             <ul className="space-y-2 text-sm text-slate-300">
-              <li>1. You get exactly one random Python question.</li>
+              <li>1. You can attempt multiple balanced Python questions.</li>
               <li>2. Translate into C, C++, Java, or JavaScript.</li>
               <li>3. Hidden tests decide accuracy.</li>
-              <li>4. AI checks logic and code quality.</li>
-              <li>5. Faster completion gives time bonus.</li>
+              <li>4. AI gives feedback, but only testcase passing affects score.</li>
+              <li>5. Admin can pause or stop the contest centrally.</li>
             </ul>
             <p className="rounded-2xl border border-red-900/40 bg-red-950/20 p-4 text-sm text-slate-300">
               Leaderboard access is available in the admin console only.

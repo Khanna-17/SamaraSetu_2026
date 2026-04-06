@@ -6,7 +6,9 @@ import { validateRequest } from "../middleware/validate.js";
 import { pickFairQuestion } from "../services/questionSelector.js";
 import {
   createSession,
+  getAttemptHistoryByRollNumber,
   getAttemptSummaryByRollNumber,
+  getContestState,
   getAttemptedQuestionIdsByRollNumber,
   getInProgressSessionByRollNumber,
   getQuestionById
@@ -24,6 +26,14 @@ router.post(
   validateRequest,
   async (req, res) => {
     const { name, rollNumber, resumeKey } = req.body;
+    const contestState = getContestState();
+
+    if (contestState.mode !== "live") {
+      return res.status(423).json({
+        message: contestState.message || "Contest is not accepting entries right now.",
+        contestState
+      });
+    }
 
     let session = getInProgressSessionByRollNumber(rollNumber);
 
@@ -42,7 +52,7 @@ router.post(
         });
       }
 
-      const question = await pickFairQuestion({ excludeQuestionIds: attemptedQuestionIds });
+      const question = await pickFairQuestion({ excludeQuestionIds: attemptedQuestionIds, rollNumber });
       session = createSession({
         name,
         rollNumber,
@@ -57,6 +67,7 @@ router.post(
     }
 
     const attemptSummary = getAttemptSummaryByRollNumber(rollNumber);
+    const attemptHistory = getAttemptHistoryByRollNumber(rollNumber);
 
     const token = jwt.sign(
       { sessionId: session._id.toString(), role: "user", rollNumber },
@@ -76,10 +87,13 @@ router.post(
         startedAt: session.startedAt,
         status: session.status,
         attemptSummary,
+        attemptHistory,
+        contestState,
         question: {
           id: session.assignedQuestion._id,
           title: session.assignedQuestion.title,
           hint: session.assignedQuestion.hint,
+          category: session.assignedQuestion.category,
           pythonCode: session.assignedQuestion.pythonCode,
           difficulty: session.assignedQuestion.difficulty,
           expectedTimeSeconds: session.assignedQuestion.expectedTimeSeconds

@@ -14,12 +14,14 @@ export default function AdminDashboardPage() {
   const [participants, setParticipants] = useState([]);
   const [analytics, setAnalytics] = useState({ avgScore: 0, maxScore: 0, completionRate: 0, total: 0, submitted: 0 });
   const [questions, setQuestions] = useState([]);
+  const [contestState, setContestState] = useState({ mode: "live", message: "Contest is live." });
   const [activeId, setActiveId] = useState("");
   const [detail, setDetail] = useState(null);
   const [editor, setEditor] = useState({
     title: "",
     pythonCode: "",
     difficulty: "medium",
+    category: "logic",
     hint: "",
     expectedTimeSeconds: 900,
     testCasesText: '[\n  { "stdin": "1 2", "expectedOutput": "3" }\n]'
@@ -27,15 +29,17 @@ export default function AdminDashboardPage() {
   const [editorError, setEditorError] = useState("");
 
   async function loadAll() {
-    const [pRes, aRes, qRes] = await Promise.all([
+    const [pRes, aRes, qRes, cRes] = await Promise.all([
       api.get("/admin/participants", AdminApiHeader()),
       api.get("/admin/analytics", AdminApiHeader()),
-      api.get("/admin/questions", AdminApiHeader())
+      api.get("/admin/questions", AdminApiHeader()),
+      api.get("/admin/contest-state", AdminApiHeader())
     ]);
 
     setParticipants(pRes.data.participants || []);
     setAnalytics(aRes.data);
     setQuestions(qRes.data.questions || []);
+    setContestState(cRes.data.contestState || { mode: "live", message: "Contest is live." });
   }
 
   async function loadDetail(id) {
@@ -56,17 +60,28 @@ export default function AdminDashboardPage() {
     const onParticipantUpdated = () => {
       loadAll();
     };
+    const onContestStateUpdated = (nextState) => {
+      setContestState(nextState || { mode: "live", message: "Contest is live." });
+    };
 
     socket.on("participant-updated", onParticipantUpdated);
+    socket.on("contest-state-updated", onContestStateUpdated);
 
     return () => {
       socket.off("participant-updated", onParticipantUpdated);
+      socket.off("contest-state-updated", onContestStateUpdated);
     };
   }, []);
 
   useEffect(() => {
     loadDetail(activeId);
   }, [activeId]);
+
+  useEffect(() => {
+    if (activeId) {
+      loadDetail(activeId);
+    }
+  }, [participants]);
 
   async function createQuestion() {
     setEditorError("");
@@ -85,6 +100,7 @@ export default function AdminDashboardPage() {
         title: editor.title,
         pythonCode: editor.pythonCode,
         difficulty: editor.difficulty,
+        category: editor.category,
         hint: editor.hint,
         expectedTimeSeconds: Number(editor.expectedTimeSeconds) || 900,
         testCases
@@ -95,6 +111,7 @@ export default function AdminDashboardPage() {
       title: "",
       pythonCode: "",
       difficulty: "medium",
+      category: "logic",
       hint: "",
       expectedTimeSeconds: 900,
       testCasesText: '[\n  { "stdin": "1 2", "expectedOutput": "3" }\n]'
@@ -112,6 +129,22 @@ export default function AdminDashboardPage() {
     loadAll();
     setActiveId("");
     setDetail(null);
+  }
+
+  async function changeContestState(mode) {
+    const defaultMessage =
+      mode === "live"
+        ? "Contest is live."
+        : mode === "paused"
+          ? "Contest is paused by admin."
+          : "Contest has been stopped by admin.";
+
+    const { data } = await api.post(
+      "/admin/contest-state",
+      { mode, message: defaultMessage },
+      AdminApiHeader()
+    );
+    setContestState(data.contestState);
   }
 
   async function exportCsv() {
@@ -139,6 +172,21 @@ export default function AdminDashboardPage() {
           <Metric title="Highest" value={analytics.maxScore} />
           <Metric title="Completion" value={completionText} />
           <Metric title="Participants" value={`${analytics.submitted}/${analytics.total}`} />
+        </GlassCard>
+
+        <GlassCard className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="font-display text-2xl text-amber-100">Contest Controls</h2>
+              <p className="text-sm text-slate-300">{contestState.message}</p>
+            </div>
+            <p className="rounded-xl border border-amber-300/20 bg-black/35 px-3 py-2 text-sm text-amber-100">Mode: {contestState.mode}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <NeonButton onClick={() => changeContestState("live")}>Go Live</NeonButton>
+            <NeonButton className="border-amber-700/50 bg-amber-900/20 text-amber-100 hover:bg-amber-900/35" onClick={() => changeContestState("paused")}>Pause</NeonButton>
+            <NeonButton className="border-red-950/70 bg-red-950/35 text-red-200 hover:bg-red-950/55" onClick={() => changeContestState("stopped")}>Stop</NeonButton>
+          </div>
         </GlassCard>
 
         <LeaderboardPanel />
@@ -188,12 +236,40 @@ export default function AdminDashboardPage() {
                 <p><strong>Name:</strong> {detail.name}</p>
                 <p><strong>Roll:</strong> {detail.rollNumber}</p>
                 <p><strong>Question:</strong> {detail.assignedQuestion?.title}</p>
+                <p><strong>Category:</strong> {detail.assignedQuestion?.category || "logic"}</p>
                 <p><strong>Score:</strong> {detail.scoreBreakdown?.finalScore || 0}</p>
                 <p><strong>Tests:</strong> {detail.testReport?.passed || 0}/{detail.testReport?.total || 0}</p>
                 <p><strong>Tab switches:</strong> {detail.tabSwitchCount || 0}</p>
                 <p><strong>Copy attempts:</strong> {detail.copyAttemptCount || 0}</p>
                 <p><strong>Paste attempts:</strong> {detail.pasteAttemptCount || 0}</p>
                 <p><strong>Feedback:</strong> {detail.aiEvaluation?.feedback || ""}</p>
+                <p><strong>Language warnings:</strong> {(detail.testReport?.diagnostics?.languageWarnings || []).join(", ") || "None"}</p>
+                <p><strong>I/O warnings:</strong> {(detail.testReport?.diagnostics?.ioWarnings || []).join(", ") || "None"}</p>
+                <p><strong>Missing signals:</strong> {(detail.testReport?.diagnostics?.missingQuestionSignals || []).join(", ") || "None"}</p>
+                {(detail.attemptHistory || []).length ? (
+                  <div className="space-y-2 pt-2">
+                    <p className="text-amber-100">Attempt History</p>
+                    {(detail.attemptHistory || []).map((attempt) => (
+                      <div key={attempt.sessionId} className="rounded-xl border border-amber-300/15 bg-black/35 p-2 text-xs">
+                        <p>Attempt {attempt.attemptNumber}: {attempt.questionTitle}</p>
+                        <p>{attempt.difficulty} • {attempt.category}</p>
+                        <p>{attempt.passed}/{attempt.total} tests • Score {attempt.finalScore}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                {(detail.testReport?.failedCases || []).length ? (
+                  <div className="space-y-2 pt-2">
+                    <p className="text-amber-100">Failed Cases</p>
+                    {(detail.testReport.failedCases || []).map((item, index) => (
+                      <div key={`${item.stdin}-${index}`} className="rounded-xl border border-red-900/35 bg-red-950/20 p-2 text-xs">
+                        <p>Input: {item.stdin || "[empty]"}</p>
+                        <p>Expected: {item.expectedOutput || "[empty]"}</p>
+                        <p>Observed: {item.actualOutput || "[empty]"}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
                 <pre className="max-h-44 overflow-auto rounded-xl border border-amber-300/20 bg-black/45 p-2 text-xs text-amber-100">{detail.code}</pre>
               </div>
             ) : null}
@@ -207,7 +283,7 @@ export default function AdminDashboardPage() {
             <div className="mt-3 max-h-72 space-y-2 overflow-auto pr-1">
               {questions.map((question) => (
                 <div key={question._id} className="flex items-center justify-between rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm">
-                  <span>{question.qid}. {question.title}</span>
+                  <span>{question.qid}. {question.title} • {question.difficulty} • {question.category}</span>
                   <NeonButton className="px-3 py-1 text-xs" onClick={() => deleteQuestion(question._id)}>Delete</NeonButton>
                 </div>
               ))}
@@ -222,6 +298,7 @@ export default function AdminDashboardPage() {
               <option value="medium">medium</option>
               <option value="hard">hard</option>
             </select>
+            <input placeholder="Category (e.g. arrays, strings, recursion)" value={editor.category} onChange={(e) => setEditor((prev) => ({ ...prev, category: e.target.value }))} className="w-full rounded-xl border border-amber-300/25 bg-black/45 px-3 py-2" />
             <input placeholder="Hint" value={editor.hint} onChange={(e) => setEditor((prev) => ({ ...prev, hint: e.target.value }))} className="w-full rounded-xl border border-amber-300/25 bg-black/45 px-3 py-2" />
             <input type="number" min="30" max="7200" placeholder="Expected time (seconds)" value={editor.expectedTimeSeconds} onChange={(e) => setEditor((prev) => ({ ...prev, expectedTimeSeconds: e.target.value }))} className="w-full rounded-xl border border-amber-300/25 bg-black/45 px-3 py-2" />
             <textarea placeholder="Python code" value={editor.pythonCode} onChange={(e) => setEditor((prev) => ({ ...prev, pythonCode: e.target.value }))} className="h-32 w-full rounded-xl border border-amber-300/25 bg-black/45 px-3 py-2" />

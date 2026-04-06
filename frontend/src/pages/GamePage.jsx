@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { Howl } from "howler";
 import api from "../lib/api";
+import socket from "../lib/socket";
 import ParticleBackground from "../components/ParticleBackground";
 import GlassCard from "../components/GlassCard";
 import NeonButton from "../components/NeonButton";
@@ -35,6 +36,8 @@ export default function GamePage() {
   const [tabSwitchCount, setTabSwitchCount] = useState(0);
   const [copyAttemptCount, setCopyAttemptCount] = useState(0);
   const [pasteAttemptCount, setPasteAttemptCount] = useState(0);
+  const [attemptHistory, setAttemptHistory] = useState([]);
+  const [contestState, setContestState] = useState({ mode: "live", message: "Contest is live." });
   const navigate = useNavigate();
   const autosaveRef = useRef({ selectedLanguage: "javascript", code: "", elapsed: 0 });
 
@@ -49,6 +52,8 @@ export default function GamePage() {
       setTabSwitchCount(data.session.tabSwitchCount || 0);
       setCopyAttemptCount(data.session.copyAttemptCount || 0);
       setPasteAttemptCount(data.session.pasteAttemptCount || 0);
+      setAttemptHistory(data.session.attemptHistory || []);
+      setContestState(data.session.contestState || { mode: "live", message: "Contest is live." });
       if (data.session.startedAt) {
         const sec = Math.max(0, Math.floor((Date.now() - new Date(data.session.startedAt).getTime()) / 1000));
         setElapsed(sec);
@@ -60,6 +65,8 @@ export default function GamePage() {
           testReport: data.session.testReport,
           aiEvaluation: data.session.aiEvaluation,
           attemptSummary: data.session.attemptSummary,
+          attemptHistory: data.session.attemptHistory || [],
+          contestState: data.session.contestState || { mode: "live", message: "Contest is live." },
           tabSwitchCount: data.session.tabSwitchCount || 0,
           copyAttemptCount: data.session.copyAttemptCount || 0,
           pasteAttemptCount: data.session.pasteAttemptCount || 0
@@ -73,6 +80,21 @@ export default function GamePage() {
       navigate("/");
     });
   }, [navigate]);
+
+  useEffect(() => {
+    socket.connect();
+    const onContestStateUpdated = (nextState) => {
+      setContestState(nextState);
+      if (nextState?.mode !== "live") {
+        setGuardMessage(nextState?.message || "Contest access has changed.");
+      }
+    };
+
+    socket.on("contest-state-updated", onContestStateUpdated);
+    return () => {
+      socket.off("contest-state-updated", onContestStateUpdated);
+    };
+  }, []);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -200,6 +222,10 @@ export default function GamePage() {
     setError("");
 
     try {
+      if (contestState.mode !== "live") {
+        throw new Error(contestState.message || "Contest is not live. Submission is disabled.");
+      }
+
       const { data } = await api.post("/game/submit", {
         selectedLanguage,
         code,
@@ -209,7 +235,7 @@ export default function GamePage() {
       localStorage.setItem("arena_result", JSON.stringify(data));
       navigate("/result");
     } catch (err) {
-      setError(err.response?.data?.message || "Submission failed");
+      setError(err.response?.data?.message || err.message || "Submission failed");
     } finally {
       setSubmitting(false);
     }
@@ -220,6 +246,7 @@ export default function GamePage() {
   }
 
   const monacoLanguage = languageOptions.find((x) => x.value === selectedLanguage)?.monaco || "javascript";
+  const editingLocked = contestState.mode !== "live";
 
   return (
     <main className="relative min-h-screen select-none bg-black px-4 py-4 text-amber-50">
@@ -235,6 +262,9 @@ export default function GamePage() {
             <p className="rounded-xl border border-red-800/40 bg-red-900/18 px-3 py-2 text-sm text-amber-100">{randomCheer}</p>
           </div>
           <TimerBar elapsed={elapsed} expectedSeconds={session.question.expectedTimeSeconds} />
+          <p className={`rounded-xl border px-3 py-2 text-sm ${editingLocked ? "border-red-900/50 bg-red-950/25 text-red-200" : "border-amber-300/20 bg-amber-100/5 text-amber-100"}`}>
+            {contestState.message || "Contest is live."}
+          </p>
         </GlassCard>
 
         <div className="grid min-h-[62vh] gap-4 lg:grid-cols-2">
@@ -271,14 +301,27 @@ export default function GamePage() {
                 language={monacoLanguage}
                 value={code}
                 onChange={(value) => setCode(value || "")}
-                options={{ minimap: { enabled: false }, fontSize: 14, selectionClipboard: false }}
+                options={{ minimap: { enabled: false }, fontSize: 14, selectionClipboard: false, readOnly: editingLocked }}
               />
             </div>
           </GlassCard>
         </div>
 
+        <GlassCard>
+          <h3 className="font-display text-xl text-amber-100">Attempt History</h3>
+          <div className="mt-3 grid gap-2 md:grid-cols-2">
+            {attemptHistory.length ? attemptHistory.map((attempt) => (
+              <div key={attempt.sessionId} className="rounded-xl border border-amber-300/15 bg-black/35 p-3 text-sm text-slate-300">
+                <p className="text-amber-100">Attempt {attempt.attemptNumber}: {attempt.questionTitle}</p>
+                <p>{attempt.difficulty} • {attempt.category}</p>
+                <p>{attempt.passed}/{attempt.total} tests • Score {attempt.finalScore}</p>
+              </div>
+            )) : <p className="text-sm text-slate-400">No completed attempts yet.</p>}
+          </div>
+        </GlassCard>
+
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-wrap items-center gap-3">
-          <NeonButton onClick={submitCode} disabled={submitting}>{submitting ? "Evaluating..." : "Submit Translation"}</NeonButton>
+          <NeonButton onClick={submitCode} disabled={submitting || editingLocked}>{submitting ? "Evaluating..." : "Submit Translation"}</NeonButton>
           <span className="text-sm text-slate-300">Auto-save: {saving ? "syncing..." : "active"}</span>
           <span className="text-sm text-slate-300">Tab switches: {tabSwitchCount}</span>
           <span className="text-sm text-slate-300">Copy attempts: {copyAttemptCount}</span>

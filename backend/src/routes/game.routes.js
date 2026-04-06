@@ -10,8 +10,10 @@ import { getIo } from "../config/socket.js";
 import { pickFairQuestion } from "../services/questionSelector.js";
 import {
   createSession,
+  getAttemptHistoryByRollNumber,
   getAttemptSummaryByRollNumber,
   getAttemptedQuestionIdsByRollNumber,
+  getContestState,
   getQuestionById,
   getSessionById,
   updateSession
@@ -36,6 +38,8 @@ router.get("/session", requireUser, async (req, res) => {
 
   const assignedQuestion = getQuestionById(session.assignedQuestion);
   const attemptSummary = getAttemptSummaryByRollNumber(session.rollNumber);
+  const attemptHistory = getAttemptHistoryByRollNumber(session.rollNumber);
+  const contestState = getContestState();
 
   return res.json({
     session: {
@@ -47,12 +51,17 @@ router.get("/session", requireUser, async (req, res) => {
       startedAt: session.startedAt,
       timeTaken: session.timeTaken,
       tabSwitchCount: session.tabSwitchCount || 0,
+      copyAttemptCount: session.copyAttemptCount || 0,
+      pasteAttemptCount: session.pasteAttemptCount || 0,
       status: session.status,
       attemptSummary,
+      attemptHistory,
+      contestState,
       question: {
         id: assignedQuestion._id,
         title: assignedQuestion.title,
         hint: assignedQuestion.hint,
+        category: assignedQuestion.category,
         pythonCode: assignedQuestion.pythonCode,
         difficulty: assignedQuestion.difficulty,
         expectedTimeSeconds: assignedQuestion.expectedTimeSeconds
@@ -110,6 +119,14 @@ router.post(
   ],
   validateRequest,
   async (req, res) => {
+    const contestState = getContestState();
+    if (contestState.mode !== "live") {
+      return res.status(423).json({
+        message: contestState.message || "Contest is not live. Submission is disabled.",
+        contestState
+      });
+    }
+
     const session = getSessionById(req.user.sessionId);
 
     if (!session) {
@@ -161,10 +178,11 @@ router.post(
       testReport: {
         passed: judgeResult.passed,
         total: judgeResult.total,
-        failedCases: judgeResult.details.filter((x) => !x.passed).map((x) => x.stdin),
+        failedCases: judgeResult.details.filter((x) => !x.passed),
         compileError: judgeResult.compileError,
         runtimeError: judgeResult.runtimeError,
-        evaluationMode: judgeResult.evaluationMode || "internal-heuristic"
+        evaluationMode: judgeResult.evaluationMode || "internal-heuristic",
+        diagnostics: judgeResult.diagnostics || {}
       }
     });
 
@@ -190,6 +208,8 @@ router.post(
       testReport: updatedSession.testReport,
       aiEvaluation: updatedSession.aiEvaluation,
       attemptSummary: getAttemptSummaryByRollNumber(updatedSession.rollNumber),
+      attemptHistory: getAttemptHistoryByRollNumber(updatedSession.rollNumber),
+      contestState: getContestState(),
       judgeDiagnostics: judgeResult.diagnostics || {}
     });
   }
@@ -265,6 +285,14 @@ router.post(
 );
 
 router.post("/next-question", requireUser, async (req, res) => {
+  const contestState = getContestState();
+  if (contestState.mode !== "live") {
+    return res.status(423).json({
+      message: contestState.message || "Contest is not live. New questions are locked.",
+      contestState
+    });
+  }
+
   const session = getSessionById(req.user.sessionId);
 
   if (!session) {
@@ -281,7 +309,7 @@ router.post("/next-question", requireUser, async (req, res) => {
     return res.status(409).json({ message: "No more questions are available for this user." });
   }
 
-  const question = await pickFairQuestion({ excludeQuestionIds: attemptedQuestionIds });
+  const question = await pickFairQuestion({ excludeQuestionIds: attemptedQuestionIds, rollNumber: session.rollNumber });
   const nextSession = createSession({
     name: session.name,
     rollNumber: session.rollNumber,
@@ -311,10 +339,13 @@ router.post("/next-question", requireUser, async (req, res) => {
       copyAttemptCount: nextSession.copyAttemptCount || 0,
       pasteAttemptCount: nextSession.pasteAttemptCount || 0,
       attemptSummary: getAttemptSummaryByRollNumber(nextSession.rollNumber),
+      attemptHistory: getAttemptHistoryByRollNumber(nextSession.rollNumber),
+      contestState,
       question: {
         id: question._id,
         title: question.title,
         hint: question.hint,
+        category: question.category,
         pythonCode: question.pythonCode,
         difficulty: question.difficulty,
         expectedTimeSeconds: question.expectedTimeSeconds

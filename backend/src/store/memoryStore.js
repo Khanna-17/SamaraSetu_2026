@@ -13,6 +13,31 @@ function createSessionId() {
   return crypto.randomUUID();
 }
 
+function inferQuestionCategory({ title = "", pythonCode = "", hint = "" }) {
+  const text = `${title} ${hint} ${pythonCode}`.toLowerCase();
+
+  if (text.includes("fib(") || text.includes("return rev(") || text.includes("return n + f(")) {
+    return "recursion";
+  }
+  if (text.includes("sort") || text.includes("sorted(")) {
+    return "sorting";
+  }
+  if (text.includes("dict") || text.includes("set(") || text.includes("seen = set")) {
+    return "hashing";
+  }
+  if (text.includes("math") || text.includes("gcd") || text.includes("lcm") || text.includes("prime")) {
+    return "math";
+  }
+  if (text.includes("input().split") || text.includes("list(map") || text.includes("arr =")) {
+    return "arrays";
+  }
+  if (text.includes("strip") || text.includes("[::-1]") || text.includes("lower()") || text.includes("string")) {
+    return "strings";
+  }
+
+  return "logic";
+}
+
 function createQuestions() {
   return questionBank.map((question) => ({
     _id: createQuestionId(question.qid),
@@ -22,6 +47,7 @@ function createQuestions() {
     pythonCode: question.pythonCode,
     testCases: deepClone(question.testCases || []),
     difficulty: question.difficulty || "medium",
+    category: question.category || inferQuestionCategory(question),
     assignedCount: 0,
     expectedTimeSeconds: Number(question.expectedTimeSeconds) || 900,
     createdAt: new Date().toISOString(),
@@ -31,7 +57,12 @@ function createQuestions() {
 
 const state = {
   questions: createQuestions(),
-  sessions: []
+  sessions: [],
+  contest: {
+    mode: "live",
+    message: "Contest is live.",
+    updatedAt: new Date().toISOString()
+  }
 };
 
 function touch(entity) {
@@ -46,7 +77,7 @@ export function listQuestions() {
   return [...state.questions].sort((a, b) => a.qid - b.qid).map((question) => deepClone(question));
 }
 
-export function pickFairQuestion({ excludeQuestionIds = [] } = {}) {
+export function pickFairQuestion({ excludeQuestionIds = [], rollNumber = "" } = {}) {
   const excluded = new Set(excludeQuestionIds);
   const availableQuestions = state.questions.filter((question) => !excluded.has(question._id));
 
@@ -54,8 +85,49 @@ export function pickFairQuestion({ excludeQuestionIds = [] } = {}) {
     throw new Error("No questions available");
   }
 
-  const minAssignedCount = Math.min(...availableQuestions.map((question) => question.assignedCount || 0));
-  const candidates = availableQuestions.filter((question) => (question.assignedCount || 0) === minAssignedCount);
+  const priorAttempts = state.sessions.filter((session) => session.rollNumber === rollNumber);
+  const difficultyCounts = priorAttempts.reduce((acc, session) => {
+    const question = getQuestionById(session.assignedQuestion);
+    if (question) {
+      acc[question.difficulty] = (acc[question.difficulty] || 0) + 1;
+    }
+    return acc;
+  }, {});
+  const categoryCounts = priorAttempts.reduce((acc, session) => {
+    const question = getQuestionById(session.assignedQuestion);
+    if (question) {
+      acc[question.category] = (acc[question.category] || 0) + 1;
+    }
+    return acc;
+  }, {});
+
+  const rankedCandidates = [...availableQuestions].sort((a, b) => {
+    const assignedDiff = Number(a.assignedCount || 0) - Number(b.assignedCount || 0);
+    if (assignedDiff !== 0) {
+      return assignedDiff;
+    }
+
+    const difficultyDiff =
+      Number(difficultyCounts[a.difficulty] || 0) - Number(difficultyCounts[b.difficulty] || 0);
+    if (difficultyDiff !== 0) {
+      return difficultyDiff;
+    }
+
+    const categoryDiff =
+      Number(categoryCounts[a.category] || 0) - Number(categoryCounts[b.category] || 0);
+    if (categoryDiff !== 0) {
+      return categoryDiff;
+    }
+
+    return Number(a.qid || 0) - Number(b.qid || 0);
+  });
+
+  const topRank = rankedCandidates[0];
+  const candidates = rankedCandidates.filter((question) => (
+    Number(question.assignedCount || 0) === Number(topRank.assignedCount || 0) &&
+    Number(difficultyCounts[question.difficulty] || 0) === Number(difficultyCounts[topRank.difficulty] || 0) &&
+    Number(categoryCounts[question.category] || 0) === Number(categoryCounts[topRank.category] || 0)
+  ));
   const question = candidates[Math.floor(Math.random() * candidates.length)];
   question.assignedCount += 1;
   touch(question);
@@ -84,7 +156,16 @@ export function createSession({ name, rollNumber, resumeKey, assignedQuestionId,
       total: 0,
       failedCases: [],
       compileError: "",
-      runtimeError: ""
+      runtimeError: "",
+      diagnostics: {
+        structureScore: 0,
+        languageScore: 0,
+        questionScore: 0,
+        ioScore: 0,
+        missingQuestionSignals: [],
+        languageWarnings: [],
+        ioWarnings: []
+      }
     },
     tabSwitchCount: 0,
     copyAttemptCount: 0,
@@ -157,6 +238,32 @@ export function getAttemptSummaryByRollNumber(rollNumber) {
   };
 }
 
+export function getAttemptHistoryByRollNumber(rollNumber) {
+  return state.sessions
+    .filter((entry) => entry.rollNumber === rollNumber)
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+    .map((entry, index) => {
+      const question = getQuestionById(entry.assignedQuestion);
+      return {
+        sessionId: entry._id,
+        attemptNumber: index + 1,
+        status: entry.status,
+        selectedLanguage: entry.selectedLanguage,
+        questionId: question?._id || entry.assignedQuestion,
+        questionTitle: question?.title || "Unknown Question",
+        category: question?.category || "logic",
+        difficulty: question?.difficulty || "medium",
+        passed: entry.testReport?.passed || 0,
+        total: entry.testReport?.total || 0,
+        finalScore: entry.scoreBreakdown?.finalScore || 0,
+        accuracyScore: entry.scoreBreakdown?.accuracyScore || 0,
+        timeTaken: entry.timeTaken || 0,
+        submittedAt: entry.submittedAt,
+        createdAt: entry.createdAt
+      };
+    });
+}
+
 export function listParticipants() {
   return [...state.sessions]
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
@@ -164,7 +271,15 @@ export function listParticipants() {
 }
 
 export function getParticipantDetail(sessionId) {
-  return getSessionById(sessionId);
+  const session = getSessionById(sessionId);
+  if (!session) {
+    return null;
+  }
+
+  return {
+    ...session,
+    attemptHistory: getAttemptHistoryByRollNumber(session.rollNumber)
+  };
 }
 
 export function getAnalytics() {
@@ -187,6 +302,7 @@ export function createQuestion(payload) {
     title: payload.title,
     pythonCode: payload.pythonCode,
     difficulty: payload.difficulty,
+    category: payload.category || inferQuestionCategory(payload),
     hint: payload.hint || "",
     expectedTimeSeconds: Number(payload.expectedTimeSeconds) || 900,
     testCases: deepClone(payload.testCases || []),
@@ -206,7 +322,8 @@ export function updateQuestion(questionId, payload) {
   }
 
   Object.assign(question, deepClone(payload), {
-    expectedTimeSeconds: Number(payload.expectedTimeSeconds) || 900
+    expectedTimeSeconds: Number(payload.expectedTimeSeconds) || 900,
+    category: payload.category || question.category || inferQuestionCategory({ ...question, ...payload })
   });
   touch(question);
   return deepClone(question);
@@ -229,6 +346,19 @@ export function resetSessionData() {
     assignedCount: 0,
     updatedAt: new Date().toISOString()
   }));
+}
+
+export function getContestState() {
+  return deepClone(state.contest);
+}
+
+export function updateContestState(payload = {}) {
+  state.contest = {
+    ...state.contest,
+    ...deepClone(payload),
+    updatedAt: new Date().toISOString()
+  };
+  return deepClone(state.contest);
 }
 
 export function getLeaderboard() {

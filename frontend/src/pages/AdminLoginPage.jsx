@@ -8,6 +8,7 @@ import ParticleBackground from "../components/ParticleBackground";
 export default function AdminLoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [otp, setOtp] = useState("");
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
@@ -16,7 +17,7 @@ export default function AdminLoginPage() {
     setError("");
 
     try {
-      const { data } = await api.post("/admin/login", { username, password });
+      const { data } = await api.post("/admin/login", { username, password, otp: otp || undefined });
       localStorage.setItem("arena_admin_token", data.token);
       navigate("/admin/dashboard");
     } catch (error) {
@@ -38,6 +39,7 @@ export default function AdminLoginPage() {
         <form onSubmit={submit} className="mt-6 space-y-4">
           <input value={username} onChange={(e) => setUsername(e.target.value)} className="w-full rounded-xl border border-amber-300/25 bg-black/45 px-3 py-2" placeholder="Username" />
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full rounded-xl border border-amber-300/25 bg-black/45 px-3 py-2" placeholder="Password" />
+          <input value={otp} onChange={(e) => setOtp(e.target.value)} className="w-full rounded-xl border border-amber-300/25 bg-black/45 px-3 py-2" placeholder="OTP if enabled" />
           {error ? <p className="text-sm text-rose-300">{error}</p> : null}
           <NeonButton type="submit">Login</NeonButton>
         </form>

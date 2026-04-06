@@ -1,18 +1,22 @@
 import { Router } from "express";
 import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
 import { body } from "express-validator";
 import { stringify } from "csv-stringify/sync";
 import { validateRequest } from "../middleware/validate.js";
 import { requireAdmin } from "../middleware/auth.js";
+import { getIo } from "../config/socket.js";
 import {
   createQuestion,
   deleteQuestion,
   getAnalytics,
+  getContestState,
   getExportRows,
   getParticipantDetail,
   listParticipants,
   listQuestions,
   resetSessionData,
+  updateContestState,
   updateQuestion,
   getQuestionById
 } from "../store/memoryStore.js";
@@ -22,6 +26,7 @@ const questionValidators = [
   body("title").trim().isLength({ min: 3, max: 160 }),
   body("pythonCode").trim().isLength({ min: 1 }),
   body("difficulty").isIn(["easy", "medium", "hard"]),
+  body("category").optional().trim().isLength({ min: 2, max: 40 }),
   body("hint").optional().isString(),
   body("expectedTimeSeconds").optional().isInt({ min: 30, max: 7200 }),
   body("testCases").isArray({ min: 1 }).withMessage("At least one test case is required."),
@@ -33,22 +38,40 @@ const questionValidators = [
     .withMessage("Each test case needs a non-empty expected output.")
 ];
 
+async function isAdminPasswordValid(password) {
+  const passwordHash = process.env.ADMIN_PASSWORD_HASH || "";
+  if (passwordHash) {
+    return bcrypt.compare(password, passwordHash);
+  }
+
+  const configuredPassword = process.env.ADMIN_PASSWORD || "";
+  if (configuredPassword.startsWith("$2")) {
+    return bcrypt.compare(password, configuredPassword);
+  }
+
+  return password === configuredPassword;
+}
+
 router.post(
   "/login",
-  [body("username").isString(), body("password").isString()],
+  [body("username").isString(), body("password").isString(), body("otp").optional().isString()],
   validateRequest,
   async (req, res) => {
-    const { username, password } = req.body;
+    const { username, password, otp } = req.body;
 
-    if (username !== process.env.ADMIN_USERNAME || password !== process.env.ADMIN_PASSWORD) {
+    if (username !== process.env.ADMIN_USERNAME || !(await isAdminPasswordValid(password))) {
       return res.status(401).json({ message: "Invalid credentials" });
+    }
+
+    if (process.env.ADMIN_OTP && otp !== process.env.ADMIN_OTP) {
+      return res.status(401).json({ message: "Invalid OTP" });
     }
 
     const token = jwt.sign({ role: "admin", username }, process.env.JWT_SECRET, {
       expiresIn: "12h"
     });
 
-    return res.json({ token });
+    return res.json({ token, otpEnabled: Boolean(process.env.ADMIN_OTP) });
   }
 );
 
@@ -59,6 +82,10 @@ router.get("/participants", requireAdmin, async (_req, res) => {
 
 router.get("/analytics", requireAdmin, async (_req, res) => {
   res.json(getAnalytics());
+});
+
+router.get("/contest-state", requireAdmin, async (_req, res) => {
+  res.json({ contestState: getContestState() });
 });
 
 router.get("/participant/:id", requireAdmin, async (req, res) => {
@@ -85,10 +112,11 @@ router.post(
       qid: req.body.qid,
       title: req.body.title,
       pythonCode: req.body.pythonCode,
-      difficulty: req.body.difficulty,
-      hint: req.body.hint || "",
-      expectedTimeSeconds: Number(req.body.expectedTimeSeconds) || 900,
-      testCases: req.body.testCases
+        difficulty: req.body.difficulty,
+        category: req.body.category,
+        hint: req.body.hint || "",
+        expectedTimeSeconds: Number(req.body.expectedTimeSeconds) || 900,
+        testCases: req.body.testCases
     });
     res.status(201).json({ question });
   }
@@ -120,6 +148,33 @@ router.post("/reset", requireAdmin, async (_req, res) => {
   resetSessionData();
   res.json({ ok: true });
 });
+
+router.post(
+  "/contest-state",
+  requireAdmin,
+  [
+    body("mode").isIn(["live", "paused", "stopped"]),
+    body("message").optional().isString().isLength({ max: 200 })
+  ],
+  validateRequest,
+  async (req, res) => {
+    const contestState = updateContestState({
+      mode: req.body.mode,
+      message:
+        req.body.message ||
+        (req.body.mode === "live"
+          ? "Contest is live."
+          : req.body.mode === "paused"
+            ? "Contest is paused by admin."
+            : "Contest has been stopped by admin.")
+    });
+
+    const io = getIo();
+    io?.emit("contest-state-updated", contestState);
+
+    res.json({ contestState });
+  }
+);
 
 router.get("/export", requireAdmin, async (_req, res) => {
   const rows = getExportRows();
