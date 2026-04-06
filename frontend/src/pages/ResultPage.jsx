@@ -60,12 +60,12 @@ export default function ResultPage() {
             <p className="mt-3 text-2xl text-red-300">{result.testReport?.passed || 0} / {result.testReport?.total || 0}</p>
           </GlassCard>
           <GlassCard>
-            <h3 className="font-display text-xl text-amber-100">AI Score</h3>
-            <p className="mt-3 text-2xl text-amber-300">{result.scoreBreakdown?.aiScore || 0}</p>
+            <h3 className="font-display text-xl text-amber-100">Accuracy</h3>
+            <p className="mt-3 text-2xl text-amber-300">{result.scoreBreakdown?.accuracyScore || 0}</p>
           </GlassCard>
           <GlassCard>
-            <h3 className="font-display text-xl text-amber-100">Time Score</h3>
-            <p className="mt-3 text-2xl text-amber-200">{result.scoreBreakdown?.timeScore || 0}</p>
+            <h3 className="font-display text-xl text-amber-100">Scoring Rule</h3>
+            <p className="mt-3 text-sm text-amber-200">Final score is based only on testcase pass percentage.</p>
           </GlassCard>
         </div>
 

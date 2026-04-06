@@ -17,6 +17,6 @@ export function computeTimeScore(timeTaken, expectedTimeSeconds = 900) {
   return Number((100 - ratio * 50).toFixed(2));
 }
 
-export function computeFinalScore({ accuracyScore, aiScore, timeScore }) {
-  return Number((accuracyScore * 0.5 + aiScore * 0.4 + timeScore * 0.1).toFixed(2));
+export function computeFinalScore({ accuracyScore }) {
+  return Number((accuracyScore || 0).toFixed(2));
 }

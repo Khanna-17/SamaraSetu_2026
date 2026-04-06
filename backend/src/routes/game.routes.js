@@ -142,9 +142,7 @@ router.post(
     const aiScore = computeAiTotal(aiEvaluation);
     const timeScore = computeTimeScore(timeTaken, assignedQuestion.expectedTimeSeconds);
     const finalScore = computeFinalScore({
-      accuracyScore: judgeResult.accuracyScore,
-      aiScore,
-      timeScore
+      accuracyScore: judgeResult.accuracyScore
     });
 
     const updatedSession = updateSession(req.user.sessionId, {
