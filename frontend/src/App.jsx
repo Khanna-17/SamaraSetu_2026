@@ -7,7 +7,14 @@ import AdminDashboardPage from "./pages/AdminDashboardPage";
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem("arena_user_token");
-  return token ? children : <Navigate to="/" replace />;
+  const session = localStorage.getItem("arena_session");
+  return token && session ? children : <Navigate to="/" replace />;
+}
+
+function ResultRoute({ children }) {
+  const token = localStorage.getItem("arena_user_token");
+  const result = localStorage.getItem("arena_result");
+  return token && result ? children : <Navigate to="/" replace />;
 }
 
 function AdminRoute({ children }) {
@@ -30,9 +37,9 @@ export default function App() {
       <Route
         path="/result"
         element={
-          <PrivateRoute>
+          <ResultRoute>
             <ResultPage />
-          </PrivateRoute>
+          </ResultRoute>
         }
       />
       <Route path="/admin" element={<AdminLoginPage />} />
