@@ -8,6 +8,20 @@ import { UserSession } from "../models/UserSession.js";
 import { Question } from "../models/Question.js";
 
 const router = Router();
+const questionValidators = [
+  body("title").trim().isLength({ min: 3, max: 160 }),
+  body("pythonCode").trim().isLength({ min: 1 }),
+  body("difficulty").isIn(["easy", "medium", "hard"]),
+  body("hint").optional().isString(),
+  body("expectedTimeSeconds").optional().isInt({ min: 30, max: 7200 }),
+  body("testCases").isArray({ min: 1 }).withMessage("At least one test case is required."),
+  body("testCases.*.stdin").optional().isString(),
+  body("testCases.*.expectedOutput")
+    .isString()
+    .trim()
+    .notEmpty()
+    .withMessage("Each test case needs a non-empty expected output.")
+];
 
 router.post(
   "/login",
@@ -74,7 +88,7 @@ router.get("/questions", requireAdmin, async (_req, res) => {
 router.post(
   "/questions",
   requireAdmin,
-  [body("title").isString(), body("pythonCode").isString(), body("difficulty").isString()],
+  questionValidators,
   validateRequest,
   async (req, res) => {
     const currentMax = await Question.findOne().sort({ qid: -1 }).select("qid");
@@ -86,20 +100,30 @@ router.post(
       pythonCode: req.body.pythonCode,
       difficulty: req.body.difficulty,
       hint: req.body.hint || "",
-      expectedTimeSeconds: req.body.expectedTimeSeconds || 900,
-      testCases: Array.isArray(req.body.testCases) ? req.body.testCases : []
+      expectedTimeSeconds: Number(req.body.expectedTimeSeconds) || 900,
+      testCases: req.body.testCases
     });
     res.status(201).json({ question });
   }
 );
 
-router.put("/questions/:id", requireAdmin, async (req, res) => {
-  const question = await Question.findByIdAndUpdate(req.params.id, req.body, { new: true });
-  if (!question) {
-    return res.status(404).json({ message: "Not found" });
+router.put(
+  "/questions/:id",
+  requireAdmin,
+  questionValidators,
+  validateRequest,
+  async (req, res) => {
+    const payload = {
+      ...req.body,
+      expectedTimeSeconds: Number(req.body.expectedTimeSeconds) || 900
+    };
+    const question = await Question.findByIdAndUpdate(req.params.id, payload, { new: true });
+    if (!question) {
+      return res.status(404).json({ message: "Not found" });
+    }
+    return res.json({ question });
   }
-  return res.json({ question });
-});
+);
 
 router.delete("/questions/:id", requireAdmin, async (req, res) => {
   await Question.findByIdAndDelete(req.params.id);

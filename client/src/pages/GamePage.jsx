@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Editor from "@monaco-editor/react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
@@ -9,7 +9,7 @@ import GlassCard from "../components/GlassCard";
 import NeonButton from "../components/NeonButton";
 import TimerBar from "../components/TimerBar";
 
-const cheers = ["You are on fire 🔥", "Compiler fears you 😎", "Edge cases fear your vibe ⚡"];
+const cheers = ["You are on fire", "Compiler fears you", "Edge cases fear your vibe"];
 
 const languageOptions = [
   { label: "C", value: "c", monaco: "c" },
@@ -32,6 +32,7 @@ export default function GamePage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const navigate = useNavigate();
+  const autosaveRef = useRef({ selectedLanguage: "javascript", code: "", elapsed: 0 });
 
   const randomCheer = useMemo(() => cheers[Math.floor(Math.random() * cheers.length)], []);
 
@@ -70,6 +71,10 @@ export default function GamePage() {
   }, []);
 
   useEffect(() => {
+    autosaveRef.current = { selectedLanguage, code, elapsed };
+  }, [selectedLanguage, code, elapsed]);
+
+  useEffect(() => {
     if (!session) {
       return;
     }
@@ -77,10 +82,11 @@ export default function GamePage() {
     const interval = setInterval(async () => {
       try {
         setSaving(true);
+        const latest = autosaveRef.current;
         await api.post("/game/autosave", {
-          selectedLanguage,
-          code,
-          timeTaken: elapsed
+          selectedLanguage: latest.selectedLanguage,
+          code: latest.code,
+          timeTaken: latest.elapsed
         });
       } finally {
         setSaving(false);
@@ -88,7 +94,7 @@ export default function GamePage() {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [session, selectedLanguage, code, elapsed]);
+  }, [session]);
 
   async function submitCode() {
     clickSound.play();

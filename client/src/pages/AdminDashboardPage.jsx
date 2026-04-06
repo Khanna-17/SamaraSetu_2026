@@ -15,7 +15,15 @@ export default function AdminDashboardPage() {
   const [questions, setQuestions] = useState([]);
   const [activeId, setActiveId] = useState("");
   const [detail, setDetail] = useState(null);
-  const [editor, setEditor] = useState({ title: "", pythonCode: "", difficulty: "medium", hint: "" });
+  const [editor, setEditor] = useState({
+    title: "",
+    pythonCode: "",
+    difficulty: "medium",
+    hint: "",
+    expectedTimeSeconds: 900,
+    testCasesText: '[\n  { "stdin": "1 2", "expectedOutput": "3" }\n]'
+  });
+  const [editorError, setEditorError] = useState("");
 
   async function loadAll() {
     const [pRes, aRes, qRes] = await Promise.all([
@@ -42,7 +50,7 @@ export default function AdminDashboardPage() {
     loadAll();
 
     socket.connect();
-    socket.emit("join-admin-room");
+    socket.emit("join-admin-room", localStorage.getItem("arena_admin_token"));
 
     const onParticipantUpdated = () => {
       loadAll();
@@ -60,8 +68,36 @@ export default function AdminDashboardPage() {
   }, [activeId]);
 
   async function createQuestion() {
-    await api.post("/admin/questions", { ...editor, testCases: [] }, AdminApiHeader());
-    setEditor({ title: "", pythonCode: "", difficulty: "medium", hint: "" });
+    setEditorError("");
+
+    let testCases;
+    try {
+      testCases = JSON.parse(editor.testCasesText);
+    } catch {
+      setEditorError("Test cases must be valid JSON.");
+      return;
+    }
+
+    await api.post(
+      "/admin/questions",
+      {
+        title: editor.title,
+        pythonCode: editor.pythonCode,
+        difficulty: editor.difficulty,
+        hint: editor.hint,
+        expectedTimeSeconds: Number(editor.expectedTimeSeconds) || 900,
+        testCases
+      },
+      AdminApiHeader()
+    );
+    setEditor({
+      title: "",
+      pythonCode: "",
+      difficulty: "medium",
+      hint: "",
+      expectedTimeSeconds: 900,
+      testCasesText: '[\n  { "stdin": "1 2", "expectedOutput": "3" }\n]'
+    });
     loadAll();
   }
 
@@ -175,7 +211,10 @@ export default function AdminDashboardPage() {
               <option value="hard">hard</option>
             </select>
             <input placeholder="Hint" value={editor.hint} onChange={(e) => setEditor((prev) => ({ ...prev, hint: e.target.value }))} className="w-full rounded-xl border border-cyan-200/30 bg-slate-900 px-3 py-2" />
+            <input type="number" min="30" max="7200" placeholder="Expected time (seconds)" value={editor.expectedTimeSeconds} onChange={(e) => setEditor((prev) => ({ ...prev, expectedTimeSeconds: e.target.value }))} className="w-full rounded-xl border border-cyan-200/30 bg-slate-900 px-3 py-2" />
             <textarea placeholder="Python code" value={editor.pythonCode} onChange={(e) => setEditor((prev) => ({ ...prev, pythonCode: e.target.value }))} className="h-32 w-full rounded-xl border border-cyan-200/30 bg-slate-900 px-3 py-2" />
+            <textarea placeholder="Test cases JSON" value={editor.testCasesText} onChange={(e) => setEditor((prev) => ({ ...prev, testCasesText: e.target.value }))} className="h-36 w-full rounded-xl border border-cyan-200/30 bg-slate-900 px-3 py-2 font-mono text-xs" />
+            {editorError ? <p className="text-sm text-rose-300">{editorError}</p> : null}
             <div className="flex gap-2">
               <NeonButton onClick={createQuestion}>Create</NeonButton>
               <NeonButton className="border-rose-300/50 bg-rose-300/10 text-rose-100" onClick={resetGame}>Reset Game</NeonButton>

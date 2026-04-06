@@ -26,10 +26,12 @@ export default function EntryPage() {
     try {
       const { data } = await api.post("/auth/entry", {
         name: form.name.trim(),
-        rollNumber: form.rollNumber.trim()
+        rollNumber: form.rollNumber.trim(),
+        resumeKey: localStorage.getItem("arena_resume_key") || undefined
       });
 
       localStorage.setItem("arena_user_token", data.token);
+      localStorage.setItem("arena_resume_key", data.resumeKey);
       localStorage.setItem("arena_session", JSON.stringify(data.session));
       navigate("/game");
     } catch (err) {
@@ -47,7 +49,7 @@ export default function EntryPage() {
           <GlassCard>
             <p className="mb-2 text-xs uppercase tracking-[0.25em] text-cyan-300">Code Translation Arena</p>
             <h1 className="font-display text-4xl leading-tight text-cyan-100 md:text-5xl">Translate Python. Beat the clock. Top the board.</h1>
-            <p className="mt-4 text-slate-300">One random Python challenge. One language target. Full scoring with hidden tests + AI logic analysis. You are on fire if you finish fast. 🔥</p>
+            <p className="mt-4 text-slate-300">One random Python challenge. One language target. Full scoring with hidden tests and AI logic analysis. Finish fast and climb the board.</p>
 
             <form className="mt-8 space-y-4" onSubmit={onSubmit}>
               <label className="block text-sm text-cyan-100">

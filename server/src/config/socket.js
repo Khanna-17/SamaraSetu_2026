@@ -1,6 +1,20 @@
 import { Server } from "socket.io";
+import jwt from "jsonwebtoken";
 
 let io;
+
+function isAdminToken(token) {
+  if (!token || !process.env.JWT_SECRET) {
+    return false;
+  }
+
+  try {
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    return payload.role === "admin";
+  } catch {
+    return false;
+  }
+}
 
 export function initSocket(server) {
   io = new Server(server, {
@@ -11,8 +25,14 @@ export function initSocket(server) {
   });
 
   io.on("connection", (socket) => {
-    socket.on("join-admin-room", () => {
+    socket.on("join-admin-room", (token, callback) => {
+      if (!isAdminToken(token)) {
+        callback?.({ ok: false, message: "Unauthorized" });
+        return;
+      }
+
       socket.join("admin-room");
+      callback?.({ ok: true });
     });
 
     socket.on("join-leaderboard-room", () => {

@@ -394,6 +394,27 @@ function detectRuntimeRisk(code) {
 }
 
 export async function evaluateWithJudge0({ sourceCode, language, testCases, sourcePython, questionTitle }) {
+  if (!Array.isArray(testCases) || testCases.length === 0) {
+    return {
+      passed: 0,
+      total: 0,
+      accuracyScore: 0,
+      details: [],
+      compileError: "",
+      runtimeError: "No test cases configured for this question.",
+      evaluationMode: "internal-strict-v2",
+      diagnostics: {
+        structureScore: 0,
+        languageScore: 0,
+        questionScore: 0,
+        ioScore: 0,
+        missingQuestionSignals: [],
+        languageWarnings: [],
+        ioWarnings: []
+      }
+    };
+  }
+
   const languageCompliance = evaluateLanguageCompliance(sourceCode, language);
   const questionCompliance = evaluateQuestionCompliance({
     sourcePython: sourcePython || "",
@@ -442,7 +463,7 @@ export async function evaluateWithJudge0({ sourceCode, language, testCases, sour
     });
   }
 
-  const total = testCases.length || 1;
+  const total = testCases.length;
   const accuracyScore = Number(((passed / total) * 100).toFixed(2));
 
   return {

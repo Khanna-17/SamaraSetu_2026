@@ -4,6 +4,7 @@ const userSessionSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
     rollNumber: { type: String, required: true, trim: true, index: true },
+    resumeKey: { type: String, required: true, select: false },
     assignedQuestion: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Question",

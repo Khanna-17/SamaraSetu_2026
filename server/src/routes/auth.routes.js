@@ -1,4 +1,5 @@
 import { Router } from "express";
+import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import { body } from "express-validator";
 import { validateRequest } from "../middleware/validate.js";
@@ -11,27 +12,39 @@ router.post(
   "/entry",
   [
     body("name").trim().isLength({ min: 2, max: 80 }),
-    body("rollNumber").trim().matches(/^[A-Za-z0-9_-]{3,25}$/)
+    body("rollNumber").trim().matches(/^[A-Za-z0-9_-]{3,25}$/),
+    body("resumeKey").optional().isString().isLength({ min: 32, max: 128 })
   ],
   validateRequest,
   async (req, res) => {
-    const { name, rollNumber } = req.body;
+    const { name, rollNumber, resumeKey } = req.body;
 
     let session = await UserSession.findOne({
       rollNumber,
       status: "in-progress"
-    }).populate("assignedQuestion");
+    })
+      .select("+resumeKey")
+      .populate("assignedQuestion");
+
+    if (session && session.resumeKey !== resumeKey) {
+      return res.status(409).json({
+        message: "An active session already exists for this roll number on another device."
+      });
+    }
 
     if (!session) {
       const question = await pickFairQuestion();
       session = await UserSession.create({
         name,
         rollNumber,
+        resumeKey: crypto.randomBytes(24).toString("hex"),
         assignedQuestion: question._id,
         code: "",
         selectedLanguage: "javascript"
       });
-      await session.populate("assignedQuestion");
+      session = await UserSession.findById(session._id)
+        .select("+resumeKey")
+        .populate("assignedQuestion");
     }
 
     const token = jwt.sign(
@@ -42,6 +55,7 @@ router.post(
 
     res.json({
       token,
+      resumeKey: session.resumeKey,
       session: {
         id: session._id,
         name: session.name,

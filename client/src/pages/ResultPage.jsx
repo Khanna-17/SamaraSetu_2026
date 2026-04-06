@@ -66,6 +66,7 @@ export default function ResultPage() {
             className="border-fuchsia-300/50 bg-fuchsia-300/10 text-fuchsia-100"
             onClick={() => {
               localStorage.removeItem("arena_user_token");
+              localStorage.removeItem("arena_resume_key");
               localStorage.removeItem("arena_session");
               localStorage.removeItem("arena_result");
               navigate("/");
