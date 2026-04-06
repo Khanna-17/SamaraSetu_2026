@@ -1,3 +1,5 @@
+import { languageMap } from "../utils/languageMap.js";
+
 const languageSignals = {
   c: {
     requiredAll: ["main("],
@@ -393,6 +395,46 @@ function detectRuntimeRisk(code) {
   return "";
 }
 
+function normalizeOutput(text) {
+  return String(text || "").replace(/\r\n/g, "\n").trim();
+}
+
+function buildJudge0Headers() {
+  const headers = { "Content-Type": "application/json" };
+  if (process.env.JUDGE0_API_KEY) {
+    headers["X-Auth-Token"] = process.env.JUDGE0_API_KEY;
+  }
+  return headers;
+}
+
+async function executeCaseWithJudge0({ sourceCode, language, stdin }) {
+  const baseUrl = String(process.env.JUDGE0_BASE_URL || "").replace(/\/+$/, "");
+  const languageConfig = languageMap[language];
+
+  if (!baseUrl || !languageConfig) {
+    return null;
+  }
+
+  const response = await fetch(`${baseUrl}/submissions?base64_encoded=false&wait=true`, {
+    method: "POST",
+    headers: buildJudge0Headers(),
+    body: JSON.stringify({
+      source_code: sourceCode,
+      language_id: languageConfig.judge0Id,
+      stdin: stdin || "",
+      cpu_time_limit: 2,
+      wall_time_limit: 5,
+      memory_limit: 262144
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Judge0 request failed with status ${response.status}`);
+  }
+
+  return response.json();
+}
+
 export async function evaluateWithJudge0({ sourceCode, language, testCases, sourcePython, questionTitle }) {
   if (!Array.isArray(testCases) || testCases.length === 0) {
     return {
@@ -427,53 +469,138 @@ export async function evaluateWithJudge0({ sourceCode, language, testCases, sour
 
   const compileError = languageCompliance.compileError;
   const runtimeError = detectRuntimeRisk(sourceCode);
-
-  let baseAccuracy =
-    structureScore * 0.3 +
-    languageCompliance.score * 0.3 +
-    questionCompliance.score * 0.25 +
-    ioCompliance.score * 0.15;
-
-  if (compileError || runtimeError) {
-    baseAccuracy = Math.min(baseAccuracy, 55);
+  if (!process.env.JUDGE0_BASE_URL) {
+    return {
+      passed: 0,
+      total: testCases.length,
+      accuracyScore: 0,
+      details: testCases.map((testCase) => ({
+        stdin: testCase.stdin,
+        expectedOutput: normalizeOutput(testCase.expectedOutput),
+        actualOutput: "[judge0 not configured]",
+        status: "Judge0 API not configured",
+        passed: false
+      })),
+      compileError: compileError.slice(0, 500),
+      runtimeError: "Judge0 API is required for testcase evaluation but JUDGE0_BASE_URL is not configured.",
+      evaluationMode: "judge0-required",
+      diagnostics: {
+        structureScore: Number(structureScore.toFixed(2)),
+        languageScore: Number(languageCompliance.score.toFixed(2)),
+        questionScore: Number(questionCompliance.score.toFixed(2)),
+        ioScore: Number(ioCompliance.score.toFixed(2)),
+        missingQuestionSignals: questionCompliance.missing,
+        languageWarnings: languageCompliance.warnings,
+        ioWarnings: ioCompliance.warnings
+      }
+    };
   }
 
-  const details = [];
-  let passed = 0;
+  if (!compileError && !runtimeError) {
+    try {
+      const details = [];
+      let passed = 0;
+      let firstCompileError = "";
+      let firstRuntimeError = "";
 
-  for (const testCase of testCases) {
-    const casePassed = estimateCasePass({
-      code: sourceCode,
-      testCase,
-      baseScore: baseAccuracy,
-      questionScore: questionCompliance.score,
-      ioScore: ioCompliance.score
-    });
+      for (const testCase of testCases) {
+        const execution = await executeCaseWithJudge0({
+          sourceCode,
+          language,
+          stdin: testCase.stdin
+        });
 
-    if (casePassed) {
-      passed += 1;
+        const actualOutput = normalizeOutput(execution.stdout);
+        const expectedOutput = normalizeOutput(testCase.expectedOutput);
+        const statusId = Number(execution.status?.id || 0);
+        const statusDescription = execution.status?.description || "Unknown";
+        const isAccepted = statusId === 3;
+        const casePassed = isAccepted && actualOutput === expectedOutput;
+
+        if (casePassed) {
+          passed += 1;
+        }
+
+        if (!firstCompileError && execution.compile_output) {
+          firstCompileError = String(execution.compile_output).slice(0, 500);
+        }
+        if (!firstRuntimeError && execution.stderr) {
+          firstRuntimeError = String(execution.stderr).slice(0, 500);
+        }
+        if (!firstRuntimeError && execution.message) {
+          firstRuntimeError = String(execution.message).slice(0, 500);
+        }
+
+        details.push({
+          stdin: testCase.stdin,
+          expectedOutput,
+          actualOutput: actualOutput || "[empty]",
+          status: casePassed ? "Passed" : statusDescription,
+          passed: casePassed
+        });
+      }
+
+      const total = testCases.length;
+      return {
+        passed,
+        total,
+        accuracyScore: Number(((passed / total) * 100).toFixed(2)),
+        details,
+        compileError: firstCompileError,
+        runtimeError: firstRuntimeError,
+        evaluationMode: "judge0-live",
+        diagnostics: {
+          structureScore: Number(structureScore.toFixed(2)),
+          languageScore: Number(languageCompliance.score.toFixed(2)),
+          questionScore: Number(questionCompliance.score.toFixed(2)),
+          ioScore: Number(ioCompliance.score.toFixed(2)),
+          missingQuestionSignals: questionCompliance.missing,
+          languageWarnings: languageCompliance.warnings,
+          ioWarnings: ioCompliance.warnings
+        }
+      };
+    } catch (error) {
+      return {
+        passed: 0,
+        total: testCases.length,
+        accuracyScore: 0,
+        details: testCases.map((testCase) => ({
+          stdin: testCase.stdin,
+          expectedOutput: normalizeOutput(testCase.expectedOutput),
+          actualOutput: "[judge0 execution failed]",
+          status: "Judge0 execution failed",
+          passed: false
+        })),
+        compileError: "",
+        runtimeError: String(error.message || "Judge0 execution failed").slice(0, 500),
+        evaluationMode: "judge0-required",
+        diagnostics: {
+          structureScore: Number(structureScore.toFixed(2)),
+          languageScore: Number(languageCompliance.score.toFixed(2)),
+          questionScore: Number(questionCompliance.score.toFixed(2)),
+          ioScore: Number(ioCompliance.score.toFixed(2)),
+          missingQuestionSignals: questionCompliance.missing,
+          languageWarnings: languageCompliance.warnings,
+          ioWarnings: ioCompliance.warnings
+        }
+      };
     }
-
-    details.push({
-      stdin: testCase.stdin,
-      expectedOutput: (testCase.expectedOutput || "").trim(),
-      actualOutput: casePassed ? (testCase.expectedOutput || "").trim() : "[estimated mismatch]",
-      status: casePassed ? "Estimated Pass (strict mode)" : "Estimated Fail (strict mode)",
-      passed: casePassed
-    });
   }
-
-  const total = testCases.length;
-  const accuracyScore = Number(((passed / total) * 100).toFixed(2));
 
   return {
-    passed,
-    total,
-    accuracyScore,
-    details,
+    passed: 0,
+    total: testCases.length,
+    accuracyScore: 0,
+    details: testCases.map((testCase) => ({
+      stdin: testCase.stdin,
+      expectedOutput: normalizeOutput(testCase.expectedOutput),
+      actualOutput: "[execution blocked]",
+      status: compileError || runtimeError || "Judge0 execution unavailable",
+      passed: false
+    })),
     compileError: compileError.slice(0, 500),
-    runtimeError: runtimeError.slice(0, 500),
-    evaluationMode: "internal-strict-v2",
+    runtimeError: runtimeError.slice(0, 500) || "Execution was not completed through Judge0.",
+    evaluationMode: "judge0-required",
     diagnostics: {
       structureScore: Number(structureScore.toFixed(2)),
       languageScore: Number(languageCompliance.score.toFixed(2)),
