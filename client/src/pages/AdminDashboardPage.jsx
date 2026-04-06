@@ -1,0 +1,197 @@
+import { useEffect, useMemo, useState } from "react";
+import api from "../lib/api";
+import socket from "../lib/socket";
+import ParticleBackground from "../components/ParticleBackground";
+import GlassCard from "../components/GlassCard";
+import NeonButton from "../components/NeonButton";
+
+function AdminApiHeader() {
+  return { headers: { "X-Admin": "1" } };
+}
+
+export default function AdminDashboardPage() {
+  const [participants, setParticipants] = useState([]);
+  const [analytics, setAnalytics] = useState({ avgScore: 0, maxScore: 0, completionRate: 0, total: 0, submitted: 0 });
+  const [questions, setQuestions] = useState([]);
+  const [activeId, setActiveId] = useState("");
+  const [detail, setDetail] = useState(null);
+  const [editor, setEditor] = useState({ title: "", pythonCode: "", difficulty: "medium", hint: "" });
+
+  async function loadAll() {
+    const [pRes, aRes, qRes] = await Promise.all([
+      api.get("/admin/participants", AdminApiHeader()),
+      api.get("/admin/analytics", AdminApiHeader()),
+      api.get("/admin/questions", AdminApiHeader())
+    ]);
+
+    setParticipants(pRes.data.participants || []);
+    setAnalytics(aRes.data);
+    setQuestions(qRes.data.questions || []);
+  }
+
+  async function loadDetail(id) {
+    if (!id) {
+      setDetail(null);
+      return;
+    }
+    const { data } = await api.get(`/admin/participant/${id}`, AdminApiHeader());
+    setDetail(data.participant);
+  }
+
+  useEffect(() => {
+    loadAll();
+
+    socket.connect();
+    socket.emit("join-admin-room");
+
+    const onParticipantUpdated = () => {
+      loadAll();
+    };
+
+    socket.on("participant-updated", onParticipantUpdated);
+
+    return () => {
+      socket.off("participant-updated", onParticipantUpdated);
+    };
+  }, []);
+
+  useEffect(() => {
+    loadDetail(activeId);
+  }, [activeId]);
+
+  async function createQuestion() {
+    await api.post("/admin/questions", { ...editor, testCases: [] }, AdminApiHeader());
+    setEditor({ title: "", pythonCode: "", difficulty: "medium", hint: "" });
+    loadAll();
+  }
+
+  async function deleteQuestion(id) {
+    await api.delete(`/admin/questions/${id}`, AdminApiHeader());
+    loadAll();
+  }
+
+  async function resetGame() {
+    await api.post("/admin/reset", {}, AdminApiHeader());
+    loadAll();
+    setActiveId("");
+    setDetail(null);
+  }
+
+  async function exportCsv() {
+    const response = await api.get("/admin/export", {
+      ...AdminApiHeader(),
+      responseType: "blob"
+    });
+
+    const url = URL.createObjectURL(response.data);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "arena-results.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  const completionText = useMemo(() => `${analytics.completionRate || 0}%`, [analytics.completionRate]);
+
+  return (
+    <main className="relative min-h-screen bg-slate-950 px-4 py-6 text-slate-100">
+      <ParticleBackground />
+      <div className="relative mx-auto flex max-w-7xl flex-col gap-4">
+        <GlassCard className="grid gap-3 md:grid-cols-4">
+          <Metric title="Average" value={analytics.avgScore} />
+          <Metric title="Highest" value={analytics.maxScore} />
+          <Metric title="Completion" value={completionText} />
+          <Metric title="Participants" value={`${analytics.submitted}/${analytics.total}`} />
+        </GlassCard>
+
+        <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+          <GlassCard>
+            <h2 className="font-display text-2xl text-cyan-100">Participants</h2>
+            <div className="mt-4 overflow-auto">
+              <table className="w-full min-w-[680px] text-sm">
+                <thead className="text-left text-cyan-200">
+                  <tr>
+                    <th>Name</th>
+                    <th>Roll</th>
+                    <th>Language</th>
+                    <th>Score</th>
+                    <th>Time</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {participants.map((p) => (
+                    <tr key={p._id} className="cursor-pointer border-t border-slate-700/60 hover:bg-slate-800/60" onClick={() => setActiveId(p._id)}>
+                      <td className="py-2">{p.name}</td>
+                      <td>{p.rollNumber}</td>
+                      <td>{p.selectedLanguage}</td>
+                      <td>{p.scoreBreakdown?.finalScore || 0}</td>
+                      <td>{p.timeTaken || 0}s</td>
+                      <td>{p.status}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </GlassCard>
+
+          <GlassCard className="space-y-4">
+            <h2 className="font-display text-2xl text-cyan-100">Participant Detail</h2>
+            {!detail ? <p className="text-sm text-slate-300">Select a participant to inspect code, test reports, and AI feedback.</p> : null}
+            {detail ? (
+              <div className="space-y-2 text-sm text-slate-300">
+                <p><strong>Name:</strong> {detail.name}</p>
+                <p><strong>Roll:</strong> {detail.rollNumber}</p>
+                <p><strong>Question:</strong> {detail.assignedQuestion?.title}</p>
+                <p><strong>Score:</strong> {detail.scoreBreakdown?.finalScore || 0}</p>
+                <p><strong>Tests:</strong> {detail.testReport?.passed || 0}/{detail.testReport?.total || 0}</p>
+                <p><strong>Feedback:</strong> {detail.aiEvaluation?.feedback || ""}</p>
+                <pre className="max-h-44 overflow-auto rounded-xl border border-cyan-300/20 bg-slate-900 p-2 text-xs text-cyan-100">{detail.code}</pre>
+              </div>
+            ) : null}
+            <NeonButton className="border-emerald-300/50 bg-emerald-300/10 text-emerald-100" onClick={exportCsv}>Export CSV</NeonButton>
+          </GlassCard>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
+          <GlassCard>
+            <h2 className="font-display text-2xl text-cyan-100">Questions</h2>
+            <div className="mt-3 max-h-72 space-y-2 overflow-auto pr-1">
+              {questions.map((question) => (
+                <div key={question._id} className="flex items-center justify-between rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm">
+                  <span>{question.qid}. {question.title}</span>
+                  <NeonButton className="px-3 py-1 text-xs" onClick={() => deleteQuestion(question._id)}>Delete</NeonButton>
+                </div>
+              ))}
+            </div>
+          </GlassCard>
+
+          <GlassCard className="space-y-3">
+            <h2 className="font-display text-2xl text-cyan-100">Add Question</h2>
+            <input placeholder="Title" value={editor.title} onChange={(e) => setEditor((prev) => ({ ...prev, title: e.target.value }))} className="w-full rounded-xl border border-cyan-200/30 bg-slate-900 px-3 py-2" />
+            <select value={editor.difficulty} onChange={(e) => setEditor((prev) => ({ ...prev, difficulty: e.target.value }))} className="w-full rounded-xl border border-cyan-200/30 bg-slate-900 px-3 py-2">
+              <option value="easy">easy</option>
+              <option value="medium">medium</option>
+              <option value="hard">hard</option>
+            </select>
+            <input placeholder="Hint" value={editor.hint} onChange={(e) => setEditor((prev) => ({ ...prev, hint: e.target.value }))} className="w-full rounded-xl border border-cyan-200/30 bg-slate-900 px-3 py-2" />
+            <textarea placeholder="Python code" value={editor.pythonCode} onChange={(e) => setEditor((prev) => ({ ...prev, pythonCode: e.target.value }))} className="h-32 w-full rounded-xl border border-cyan-200/30 bg-slate-900 px-3 py-2" />
+            <div className="flex gap-2">
+              <NeonButton onClick={createQuestion}>Create</NeonButton>
+              <NeonButton className="border-rose-300/50 bg-rose-300/10 text-rose-100" onClick={resetGame}>Reset Game</NeonButton>
+            </div>
+          </GlassCard>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+function Metric({ title, value }) {
+  return (
+    <div className="rounded-2xl border border-cyan-300/30 bg-slate-900/70 p-4">
+      <p className="text-xs uppercase tracking-[0.2em] text-cyan-300">{title}</p>
+      <p className="mt-2 font-display text-3xl text-cyan-100">{value}</p>
+    </div>
+  );
+}

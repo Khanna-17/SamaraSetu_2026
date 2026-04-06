@@ -1,0 +1,28 @@
+{
+  "name": "code-translation-arena-client",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
+    "axios": "^1.8.4",
+    "framer-motion": "^11.15.0",
+    "howler": "^2.2.4",
+    "react": "^18.3.1",
+    "react-confetti": "^6.2.2",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^7.4.0",
+    "socket.io-client": "^4.8.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "@tailwindcss/vite": "^4.0.14",
+    "tailwindcss": "^4.0.14",
+    "vite": "^6.2.0"
+  }
+}
