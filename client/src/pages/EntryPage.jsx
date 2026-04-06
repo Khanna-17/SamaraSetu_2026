@@ -5,7 +5,6 @@ import api from "../lib/api";
 import ParticleBackground from "../components/ParticleBackground";
 import GlassCard from "../components/GlassCard";
 import NeonButton from "../components/NeonButton";
-import LeaderboardPanel from "../components/LeaderboardPanel";
 
 export default function EntryPage() {
   const [form, setForm] = useState({ name: "", rollNumber: "" });
@@ -91,7 +90,9 @@ export default function EntryPage() {
               <li>4. AI checks logic and code quality.</li>
               <li>5. Faster completion gives time bonus.</li>
             </ul>
-            <LeaderboardPanel />
+            <p className="rounded-2xl border border-fuchsia-200/30 bg-fuchsia-950/20 p-4 text-sm text-slate-300">
+              Leaderboard access is available in the admin console only.
+            </p>
           </GlassCard>
         </motion.div>
       </div>

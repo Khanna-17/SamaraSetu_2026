@@ -35,8 +35,14 @@ export function initSocket(server) {
       callback?.({ ok: true });
     });
 
-    socket.on("join-leaderboard-room", () => {
+    socket.on("join-leaderboard-room", (token, callback) => {
+      if (!isAdminToken(token)) {
+        callback?.({ ok: false, message: "Unauthorized" });
+        return;
+      }
+
       socket.join("leaderboard-room");
+      callback?.({ ok: true });
     });
   });
 }

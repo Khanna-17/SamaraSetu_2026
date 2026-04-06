@@ -4,6 +4,7 @@ import socket from "../lib/socket";
 import ParticleBackground from "../components/ParticleBackground";
 import GlassCard from "../components/GlassCard";
 import NeonButton from "../components/NeonButton";
+import LeaderboardPanel from "../components/LeaderboardPanel";
 
 function AdminApiHeader() {
   return { headers: { "X-Admin": "1" } };
@@ -139,6 +140,8 @@ export default function AdminDashboardPage() {
           <Metric title="Completion" value={completionText} />
           <Metric title="Participants" value={`${analytics.submitted}/${analytics.total}`} />
         </GlassCard>
+
+        <LeaderboardPanel />
 
         <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
           <GlassCard>

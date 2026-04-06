@@ -1,9 +1,10 @@
 import { Router } from "express";
+import { requireAdmin } from "../middleware/auth.js";
 import { UserSession } from "../models/UserSession.js";
 
 const router = Router();
 
-router.get("/live", async (_req, res) => {
+router.get("/live", requireAdmin, async (_req, res) => {
   const leaders = await UserSession.find({ status: "submitted" })
     .sort({ "scoreBreakdown.finalScore": -1, timeTaken: 1 })
     .limit(20)
