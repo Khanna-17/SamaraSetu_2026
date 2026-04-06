@@ -3,12 +3,9 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
-    "start": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
-    "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+    "start": "node start.js",
+    "dev": "node start.js",
     "dev:server": "npm run dev --prefix server",
     "dev:client": "npm run dev --prefix client"
-  },
-  "devDependencies": {
-    "concurrently": "^9.1.2"
   }
 }
