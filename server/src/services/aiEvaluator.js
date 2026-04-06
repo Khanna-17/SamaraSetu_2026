@@ -1,66 +1,162 @@
-import axios from "axios";
-
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, Number(value) || 0));
 }
 
-function normalizeScores(payload) {
-  return {
-    functionalEquivalence: clamp(payload.functionalEquivalence, 0, 40),
-    logicalCorrectness: clamp(payload.logicalCorrectness, 0, 20),
-    timeComplexitySimilarity: clamp(payload.timeComplexitySimilarity, 0, 15),
-    spaceComplexitySimilarity: clamp(payload.spaceComplexitySimilarity, 0, 10),
-    readability: clamp(payload.readability, 0, 15),
-    feedback: String(payload.feedback || "Good attempt. Keep refining edge cases and variable naming.")
-  };
+const tokenRegex = /[A-Za-z_][A-Za-z0-9_]*/g;
+
+function normalize(text) {
+  return String(text || "").toLowerCase();
 }
 
-function fallbackEvaluation(sourcePython, userCode) {
-  const lenRatio = Math.min(1, userCode.length / Math.max(sourcePython.length, 1));
-  const signal = userCode.includes("for") || userCode.includes("while") || userCode.includes("if");
+function collectTokens(source) {
+  return new Set((normalize(source).match(tokenRegex) || []).filter((token) => token.length > 2));
+}
+
+function overlapRatio(a, b) {
+  if (!a.size) {
+    return 0;
+  }
+
+  let shared = 0;
+  for (const token of a) {
+    if (b.has(token)) {
+      shared += 1;
+    }
+  }
+
+  return shared / a.size;
+}
+
+function inferComplexityLevel(code) {
+  const normalized = normalize(code);
+  const loops = (normalized.match(/\bfor\b|\bwhile\b/g) || []).length;
+  const recursion = normalized.includes("def ") || normalized.includes("function") || normalized.includes("main(")
+    ? (() => {
+        const lines = normalized.split("\n");
+        return lines.some((line) => {
+          const trimmed = line.trim();
+          if (!trimmed) {
+            return false;
+          }
+          return /\breturn\b/.test(trimmed) && /\w+\(/.test(trimmed);
+        });
+      })()
+    : false;
+
+  if (loops >= 2) {
+    return 3;
+  }
+  if (loops === 1 || recursion) {
+    return 2;
+  }
+  return 1;
+}
+
+function hasDataStructureSignals(code) {
+  const normalized = normalize(code);
+  return (
+    normalized.includes("[") ||
+    normalized.includes("{") ||
+    normalized.includes("array") ||
+    normalized.includes("vector") ||
+    normalized.includes("list") ||
+    normalized.includes("map") ||
+    normalized.includes("set")
+  );
+}
+
+function scoreReadability(userCode) {
+  const lines = String(userCode || "").split("\n");
+  const nonEmpty = lines.filter((line) => line.trim().length > 0);
+  const avgLineLength = nonEmpty.length
+    ? nonEmpty.reduce((acc, line) => acc + line.length, 0) / nonEmpty.length
+    : 0;
+  const hasIndentation = nonEmpty.some((line) => /^\s{2,}|\t+/.test(line));
+  const hasComments = nonEmpty.some((line) => line.trim().startsWith("//") || line.trim().startsWith("/*") || line.trim().startsWith("#"));
+  const readableLengthScore = avgLineLength > 0 && avgLineLength <= 90 ? 7 : avgLineLength <= 120 ? 5 : 3;
+
+  return clamp(readableLengthScore + (hasIndentation ? 5 : 2) + (hasComments ? 3 : 1), 0, 15);
+}
+
+function buildFeedback({ functionalEquivalence, logicalCorrectness, timeComplexitySimilarity, spaceComplexitySimilarity, readability }) {
+  const notes = [];
+
+  if (functionalEquivalence < 20) {
+    notes.push("Your translation appears to miss parts of the original behavior.");
+  } else if (functionalEquivalence < 32) {
+    notes.push("Core behavior is partially captured; verify edge cases and input handling.");
+  } else {
+    notes.push("Behavior mapping from Python looks strong overall.");
+  }
+
+  if (logicalCorrectness < 12) {
+    notes.push("Add clearer control-flow logic to match Python branches and loops.");
+  }
+  if (timeComplexitySimilarity < 8) {
+    notes.push("Try matching the original algorithmic approach to keep complexity similar.");
+  }
+  if (spaceComplexitySimilarity < 6) {
+    notes.push("Reduce extra temporary containers to improve space behavior.");
+  }
+  if (readability < 8) {
+    notes.push("Improve naming and formatting for readability.");
+  }
+
+  return notes.join(" ");
+}
+
+function localEvaluate(sourcePython, userCode, targetLanguage) {
+  const normalizedSource = normalize(sourcePython);
+  const normalizedUser = normalize(userCode);
+
+  const pyTokens = collectTokens(sourcePython);
+  const userTokens = collectTokens(userCode);
+  const tokenOverlap = overlapRatio(pyTokens, userTokens);
+
+  const sourceHasInput = normalizedSource.includes("input(");
+  const sourceHasOutput = normalizedSource.includes("print(");
+  const userHasInputSignal =
+    normalizedUser.includes("scanf") ||
+    normalizedUser.includes("cin") ||
+    normalizedUser.includes("scanner") ||
+    normalizedUser.includes("readline") ||
+    normalizedUser.includes("fs.readfilesync") ||
+    normalizedUser.includes("prompt(");
+  const userHasOutputSignal =
+    normalizedUser.includes("printf") ||
+    normalizedUser.includes("cout") ||
+    normalizedUser.includes("system.out") ||
+    normalizedUser.includes("console.log");
+
+  const sourceComplexity = inferComplexityLevel(sourcePython);
+  const userComplexity = inferComplexityLevel(userCode);
+  const complexityGap = Math.abs(sourceComplexity - userComplexity);
+
+  const sourceSpace = hasDataStructureSignals(sourcePython) ? 2 : 1;
+  const userSpace = hasDataStructureSignals(userCode) ? 2 : 1;
+  const spaceGap = Math.abs(sourceSpace - userSpace);
+
+  const languageSignalBonus = (() => {
+    if (targetLanguage === "javascript" && normalizedUser.includes("console.log")) return 2;
+    if (targetLanguage === "java" && normalizedUser.includes("system.out")) return 2;
+    if ((targetLanguage === "c" || targetLanguage === "cpp") && (normalizedUser.includes("printf") || normalizedUser.includes("cout"))) return 2;
+    return 0;
+  })();
 
   return {
-    functionalEquivalence: Number((22 + lenRatio * 10).toFixed(2)),
-    logicalCorrectness: signal ? 12 : 8,
-    timeComplexitySimilarity: 8,
-    spaceComplexitySimilarity: 6,
-    readability: 9,
-    feedback: "Fallback AI score used because OpenAI key is missing or response parse failed."
+    functionalEquivalence: clamp(Number((12 + tokenOverlap * 24 + (sourceHasOutput && userHasOutputSignal ? 4 : 0)).toFixed(2)), 0, 40),
+    logicalCorrectness: clamp(Number((6 + tokenOverlap * 10 + (sourceHasInput ? (userHasInputSignal ? 4 : 0) : 2) + languageSignalBonus).toFixed(2)), 0, 20),
+    timeComplexitySimilarity: clamp(Number((15 - complexityGap * 4).toFixed(2)), 0, 15),
+    spaceComplexitySimilarity: clamp(Number((10 - spaceGap * 3).toFixed(2)), 0, 10),
+    readability: scoreReadability(userCode)
   };
 }
 
 export async function evaluateWithAi({ sourcePython, userCode, targetLanguage }) {
-  if (!process.env.OPENAI_API_KEY) {
-    return fallbackEvaluation(sourcePython, userCode);
-  }
+  const localScore = localEvaluate(sourcePython, userCode, targetLanguage);
 
-  const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
-  const prompt = `You are evaluating code translation quality.\n\nSource Python:\n${sourcePython}\n\nTranslated ${targetLanguage} code:\n${userCode}\n\nReturn strict JSON only with this shape:\n{\n  \"functionalEquivalence\": number 0-40,\n  \"logicalCorrectness\": number 0-20,\n  \"timeComplexitySimilarity\": number 0-15,\n  \"spaceComplexitySimilarity\": number 0-10,\n  \"readability\": number 0-15,\n  \"feedback\": \"short constructive feedback\"\n}`;
-
-  try {
-    const response = await axios.post(
-      "https://api.openai.com/v1/chat/completions",
-      {
-        model,
-        temperature: 0.2,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: "You are a strict code evaluation engine." },
-          { role: "user", content: prompt }
-        ]
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-          "Content-Type": "application/json"
-        },
-        timeout: 30000
-      }
-    );
-
-    const content = response.data.choices?.[0]?.message?.content || "{}";
-    return normalizeScores(JSON.parse(content));
-  } catch {
-    return fallbackEvaluation(sourcePython, userCode);
-  }
+  return {
+    ...localScore,
+    feedback: buildFeedback(localScore)
+  };
 }

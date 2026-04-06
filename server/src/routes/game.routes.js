@@ -108,7 +108,9 @@ router.post(
     const judgeResult = await evaluateWithJudge0({
       sourceCode: code,
       language: selectedLanguage,
-      testCases: session.assignedQuestion.testCases
+      testCases: session.assignedQuestion.testCases,
+      sourcePython: session.assignedQuestion.pythonCode,
+      questionTitle: session.assignedQuestion.title
     });
 
     const aiEvaluation = await evaluateWithAi({
@@ -142,7 +144,8 @@ router.post(
       total: judgeResult.total,
       failedCases: judgeResult.details.filter((x) => !x.passed).map((x) => x.stdin),
       compileError: judgeResult.compileError,
-      runtimeError: judgeResult.runtimeError
+      runtimeError: judgeResult.runtimeError,
+      evaluationMode: judgeResult.evaluationMode || "internal-heuristic"
     };
 
     await session.save();
@@ -164,7 +167,8 @@ router.post(
     return res.json({
       scoreBreakdown: session.scoreBreakdown,
       testReport: session.testReport,
-      aiEvaluation: session.aiEvaluation
+      aiEvaluation: session.aiEvaluation,
+      judgeDiagnostics: judgeResult.diagnostics || {}
     });
   }
 );
