@@ -1,12 +1,12 @@
-# Code Translation Arena - Full Stack MERN Platform
+# Code Translation Arena - Full Stack Platform
 
 A real-time coding challenge platform where each participant translates one random Python program into C, C++, Java, or JavaScript.
 
 ## Architecture
 
-- client: React + Vite + Tailwind + Monaco Editor
-- server: Node.js + Express + Mongoose + Socket.IO
-- database: MongoDB
+- frontend: React + Vite + Tailwind + Monaco Editor
+- backend: Node.js + Express + Socket.IO
+- data store: in-memory per running backend session
 - execution: Judge0 API
 - AI evaluation: OpenAI API
 
@@ -31,43 +31,33 @@ A real-time coding challenge platform where each participant translates one rand
 - CSV export of results
 - Dark cyberpunk neon UI with glassmorphism, particles, and animated transitions
 - Security basics: request validation, rate limiting, code length limit, Helmet, CORS
-- Mongo connection pool tuned for concurrent usage
+- In-memory runtime tuned for small event-style concurrent usage
 
 ## Folder Structure
 
-- client
-- server
+- frontend
+- backend
 
 ## Setup
 
 1. Create env files
 
-- Copy server/.env.example to server/.env and fill real keys.
-- Copy client/.env.example to client/.env.
+- Copy backend/.env.example to backend/.env and fill real keys.
+- Copy frontend/.env.example to frontend/.env.
 
 2. Install dependencies
 
 ```bash
-cd server
+cd backend
 npm install
-cd ../client
+cd ../frontend
 npm install
 ```
 
-3. Run locally (two terminals)
-
-Terminal 1:
+3. Run locally
 
 ```bash
-cd server
-npm run dev
-```
-
-Terminal 2:
-
-```bash
-cd client
-npm run dev
+npm start
 ```
 
 4. Open app
@@ -77,11 +67,10 @@ npm run dev
 
 ## Environment Variables
 
-### Server
+### Backend
 
 - PORT
 - NODE_ENV
-- MONGO_URI
 - JWT_SECRET
 - JWT_EXPIRES_IN
 - ADMIN_USERNAME
@@ -93,40 +82,36 @@ npm run dev
 - FRONTEND_URL
 - MAX_CODE_LENGTH
 
-### Client
+### Frontend
 
 - VITE_API_URL
 - VITE_SOCKET_URL
 
 ## Deployment
 
-### Option A: Render (Server) + Vercel (Client)
+### Render Blueprint: Frontend + Backend
 
-- Render server config file is included: server/render.yaml
-- Deploy server root as server folder.
-- Add all server env variables in Render dashboard.
-- Deploy client to Vercel from client folder.
-- Set client env:
-  - VITE_API_URL = your deployed server URL + /api
-  - VITE_SOCKET_URL = your deployed server URL
-- Update server FRONTEND_URL to your deployed client URL.
-
-### Option B: Railway (Server)
-
-- Deploy server folder directly.
-- Set same server env vars.
-- Deploy client separately on Vercel/Netlify.
+- The root `render.yaml` defines:
+  - a static site for `frontend`
+  - a web service for `backend`
+- Sync the Blueprint from the repo root in Render.
+- Set backend env vars in the Render dashboard for the backend service.
+- Set frontend env vars in the Render dashboard for the frontend static site:
+  - `VITE_API_URL` = your backend URL + `/api`
+  - `VITE_SOCKET_URL` = your backend URL
+- Update backend `FRONTEND_URL` to your deployed frontend URL.
 
 ## Notes for Production
 
-- For 50 concurrent users, keep Mongo pool maxPoolSize >= 50 (already set).
+- This app currently stores contest state in memory, so restarting the backend clears sessions and results.
+- A single backend instance is generally fine for an event-sized batch around 50 concurrent users.
 - Use a paid Judge0/OpenAI tier for stable API throughput.
 - Consider queue-based evaluation worker for heavy spikes.
 - Add HTTPS and stronger admin auth before real exam usage.
 
 ## Default Admin
 
-Set in server env:
+Set in backend env:
 
 - ADMIN_USERNAME
 - ADMIN_PASSWORD

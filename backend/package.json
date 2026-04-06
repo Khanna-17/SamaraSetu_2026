@@ -1,5 +1,5 @@
 {
-  "name": "code-translation-arena-server",
+  "name": "code-translation-arena-backend",
   "version": "1.0.0",
   "type": "module",
   "main": "src/index.js",

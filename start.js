@@ -37,8 +37,8 @@ process.on("SIGINT", () => shutdown(0));
 process.on("SIGTERM", () => shutdown(0));
 
 if (isRender || isProduction) {
-  run("npm", ["run", "start", "--prefix", "server"]);
+  run("npm", ["run", "start", "--prefix", "backend"]);
 } else {
-  run("npm", ["run", "dev", "--prefix", "server"]);
-  run("npm", ["run", "dev", "--prefix", "client"]);
+  run("npm", ["run", "dev", "--prefix", "backend"]);
+  run("npm", ["run", "dev", "--prefix", "frontend"]);
 }
