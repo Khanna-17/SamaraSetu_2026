@@ -3,8 +3,8 @@ import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import { body } from "express-validator";
 import { validateRequest } from "../middleware/validate.js";
-import { UserSession } from "../models/UserSession.js";
 import { pickFairQuestion } from "../services/questionSelector.js";
+import { createSession, getInProgressSessionByRollNumber, getQuestionById } from "../store/memoryStore.js";
 
 const router = Router();
 
@@ -19,12 +19,7 @@ router.post(
   async (req, res) => {
     const { name, rollNumber, resumeKey } = req.body;
 
-    let session = await UserSession.findOne({
-      rollNumber,
-      status: "in-progress"
-    })
-      .select("+resumeKey")
-      .populate("assignedQuestion");
+    let session = getInProgressSessionByRollNumber(rollNumber);
 
     if (session && session.resumeKey !== resumeKey) {
       return res.status(409).json({
@@ -34,17 +29,17 @@ router.post(
 
     if (!session) {
       const question = await pickFairQuestion();
-      session = await UserSession.create({
+      session = createSession({
         name,
         rollNumber,
         resumeKey: crypto.randomBytes(24).toString("hex"),
-        assignedQuestion: question._id,
+        assignedQuestionId: question._id,
         code: "",
         selectedLanguage: "javascript"
       });
-      session = await UserSession.findById(session._id)
-        .select("+resumeKey")
-        .populate("assignedQuestion");
+      session.assignedQuestion = question;
+    } else {
+      session.assignedQuestion = getQuestionById(session.assignedQuestion);
     }
 
     const token = jwt.sign(

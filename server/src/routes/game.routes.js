@@ -2,11 +2,11 @@ import { Router } from "express";
 import { body } from "express-validator";
 import { requireUser } from "../middleware/auth.js";
 import { validateRequest } from "../middleware/validate.js";
-import { UserSession } from "../models/UserSession.js";
 import { evaluateWithJudge0 } from "../services/judge0.js";
 import { evaluateWithAi } from "../services/aiEvaluator.js";
 import { computeAiTotal, computeFinalScore, computeTimeScore } from "../services/scoring.js";
 import { getIo } from "../config/socket.js";
+import { getQuestionById, getSessionById, updateSession } from "../store/memoryStore.js";
 
 const router = Router();
 
@@ -19,11 +19,13 @@ function sanitizeCode(rawCode) {
 }
 
 router.get("/session", requireUser, async (req, res) => {
-  const session = await UserSession.findById(req.user.sessionId).populate("assignedQuestion");
+  const session = getSessionById(req.user.sessionId);
 
   if (!session) {
     return res.status(404).json({ message: "Session not found" });
   }
+
+  const assignedQuestion = getQuestionById(session.assignedQuestion);
 
   return res.json({
     session: {
@@ -36,12 +38,12 @@ router.get("/session", requireUser, async (req, res) => {
       timeTaken: session.timeTaken,
       status: session.status,
       question: {
-        id: session.assignedQuestion._id,
-        title: session.assignedQuestion.title,
-        hint: session.assignedQuestion.hint,
-        pythonCode: session.assignedQuestion.pythonCode,
-        difficulty: session.assignedQuestion.difficulty,
-        expectedTimeSeconds: session.assignedQuestion.expectedTimeSeconds
+        id: assignedQuestion._id,
+        title: assignedQuestion.title,
+        hint: assignedQuestion.hint,
+        pythonCode: assignedQuestion.pythonCode,
+        difficulty: assignedQuestion.difficulty,
+        expectedTimeSeconds: assignedQuestion.expectedTimeSeconds
       },
       scoreBreakdown: session.scoreBreakdown,
       testReport: session.testReport,
@@ -75,7 +77,12 @@ router.post(
       payload.timeTaken = req.body.timeTaken;
     }
 
-    await UserSession.updateOne({ _id: req.user.sessionId, status: "in-progress" }, { $set: payload });
+    const session = getSessionById(req.user.sessionId);
+    if (!session || session.status !== "in-progress") {
+      return res.status(404).json({ message: "Session not found" });
+    }
+
+    updateSession(req.user.sessionId, payload);
 
     res.json({ ok: true });
   }
@@ -91,7 +98,7 @@ router.post(
   ],
   validateRequest,
   async (req, res) => {
-    const session = await UserSession.findById(req.user.sessionId).populate("assignedQuestion");
+    const session = getSessionById(req.user.sessionId);
 
     if (!session) {
       return res.status(404).json({ message: "Session not found" });
@@ -104,70 +111,71 @@ router.post(
     const code = sanitizeCode(req.body.code);
     const selectedLanguage = req.body.selectedLanguage;
     const timeTaken = req.body.timeTaken;
+    const assignedQuestion = getQuestionById(session.assignedQuestion);
 
     const judgeResult = await evaluateWithJudge0({
       sourceCode: code,
       language: selectedLanguage,
-      testCases: session.assignedQuestion.testCases,
-      sourcePython: session.assignedQuestion.pythonCode,
-      questionTitle: session.assignedQuestion.title
+      testCases: assignedQuestion.testCases,
+      sourcePython: assignedQuestion.pythonCode,
+      questionTitle: assignedQuestion.title
     });
 
     const aiEvaluation = await evaluateWithAi({
-      sourcePython: session.assignedQuestion.pythonCode,
+      sourcePython: assignedQuestion.pythonCode,
       userCode: code,
       targetLanguage: selectedLanguage
     });
 
     const aiScore = computeAiTotal(aiEvaluation);
-    const timeScore = computeTimeScore(timeTaken, session.assignedQuestion.expectedTimeSeconds);
+    const timeScore = computeTimeScore(timeTaken, assignedQuestion.expectedTimeSeconds);
     const finalScore = computeFinalScore({
       accuracyScore: judgeResult.accuracyScore,
       aiScore,
       timeScore
     });
 
-    session.code = code;
-    session.selectedLanguage = selectedLanguage;
-    session.status = "submitted";
-    session.submittedAt = new Date();
-    session.timeTaken = timeTaken;
-    session.aiEvaluation = aiEvaluation;
-    session.scoreBreakdown = {
-      accuracyScore: judgeResult.accuracyScore,
-      aiScore,
-      timeScore,
-      finalScore
-    };
-    session.testReport = {
-      passed: judgeResult.passed,
-      total: judgeResult.total,
-      failedCases: judgeResult.details.filter((x) => !x.passed).map((x) => x.stdin),
-      compileError: judgeResult.compileError,
-      runtimeError: judgeResult.runtimeError,
-      evaluationMode: judgeResult.evaluationMode || "internal-heuristic"
-    };
-
-    await session.save();
+    const updatedSession = updateSession(req.user.sessionId, {
+      code,
+      selectedLanguage,
+      status: "submitted",
+      submittedAt: new Date().toISOString(),
+      timeTaken,
+      aiEvaluation,
+      scoreBreakdown: {
+        accuracyScore: judgeResult.accuracyScore,
+        aiScore,
+        timeScore,
+        finalScore
+      },
+      testReport: {
+        passed: judgeResult.passed,
+        total: judgeResult.total,
+        failedCases: judgeResult.details.filter((x) => !x.passed).map((x) => x.stdin),
+        compileError: judgeResult.compileError,
+        runtimeError: judgeResult.runtimeError,
+        evaluationMode: judgeResult.evaluationMode || "internal-heuristic"
+      }
+    });
 
     const io = getIo();
     if (io) {
       io.to("admin-room").emit("participant-updated", {
-        id: session._id,
-        name: session.name,
-        rollNumber: session.rollNumber,
+        id: updatedSession._id,
+        name: updatedSession.name,
+        rollNumber: updatedSession.rollNumber,
         selectedLanguage,
         finalScore,
-        status: session.status,
+        status: updatedSession.status,
         timeTaken
       });
       io.to("leaderboard-room").emit("leaderboard-refresh");
     }
 
     return res.json({
-      scoreBreakdown: session.scoreBreakdown,
-      testReport: session.testReport,
-      aiEvaluation: session.aiEvaluation,
+      scoreBreakdown: updatedSession.scoreBreakdown,
+      testReport: updatedSession.testReport,
+      aiEvaluation: updatedSession.aiEvaluation,
       judgeDiagnostics: judgeResult.diagnostics || {}
     });
   }

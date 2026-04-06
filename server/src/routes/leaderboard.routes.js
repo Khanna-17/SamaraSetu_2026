@@ -1,14 +1,11 @@
 import { Router } from "express";
 import { requireAdmin } from "../middleware/auth.js";
-import { UserSession } from "../models/UserSession.js";
+import { getLeaderboard } from "../store/memoryStore.js";
 
 const router = Router();
 
 router.get("/live", requireAdmin, async (_req, res) => {
-  const leaders = await UserSession.find({ status: "submitted" })
-    .sort({ "scoreBreakdown.finalScore": -1, timeTaken: 1 })
-    .limit(20)
-    .select("name rollNumber selectedLanguage scoreBreakdown timeTaken");
+  const leaders = getLeaderboard();
 
   res.json({
     leaderboard: leaders.map((user, index) => ({

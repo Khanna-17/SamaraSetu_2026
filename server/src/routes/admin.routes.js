@@ -4,8 +4,18 @@ import { body } from "express-validator";
 import { stringify } from "csv-stringify/sync";
 import { validateRequest } from "../middleware/validate.js";
 import { requireAdmin } from "../middleware/auth.js";
-import { UserSession } from "../models/UserSession.js";
-import { Question } from "../models/Question.js";
+import {
+  createQuestion,
+  deleteQuestion,
+  getAnalytics,
+  getExportRows,
+  getParticipantDetail,
+  listParticipants,
+  listQuestions,
+  resetSessionData,
+  updateQuestion,
+  getQuestionById
+} from "../store/memoryStore.js";
 
 const router = Router();
 const questionValidators = [
@@ -43,46 +53,26 @@ router.post(
 );
 
 router.get("/participants", requireAdmin, async (_req, res) => {
-  const participants = await UserSession.find()
-    .sort({ updatedAt: -1 })
-    .select("name rollNumber selectedLanguage scoreBreakdown timeTaken status");
-
+  const participants = listParticipants();
   res.json({ participants });
 });
 
 router.get("/analytics", requireAdmin, async (_req, res) => {
-  const total = await UserSession.countDocuments();
-  const submitted = await UserSession.countDocuments({ status: "submitted" });
-  const scoreAgg = await UserSession.aggregate([
-    { $match: { status: "submitted" } },
-    {
-      $group: {
-        _id: null,
-        avgScore: { $avg: "$scoreBreakdown.finalScore" },
-        maxScore: { $max: "$scoreBreakdown.finalScore" }
-      }
-    }
-  ]);
-
-  const avgScore = Number((scoreAgg[0]?.avgScore || 0).toFixed(2));
-  const maxScore = Number((scoreAgg[0]?.maxScore || 0).toFixed(2));
-  const completionRate = total ? Number(((submitted / total) * 100).toFixed(2)) : 0;
-
-  res.json({ avgScore, maxScore, completionRate, total, submitted });
+  res.json(getAnalytics());
 });
 
 router.get("/participant/:id", requireAdmin, async (req, res) => {
-  const participant = await UserSession.findById(req.params.id).populate("assignedQuestion");
+  const participant = getParticipantDetail(req.params.id);
   if (!participant) {
     return res.status(404).json({ message: "Not found" });
   }
 
+  participant.assignedQuestion = getQuestionById(participant.assignedQuestion);
   return res.json({ participant });
 });
 
 router.get("/questions", requireAdmin, async (_req, res) => {
-  const questions = await Question.find().sort({ qid: 1 });
-  res.json({ questions });
+  res.json({ questions: listQuestions() });
 });
 
 router.post(
@@ -91,11 +81,8 @@ router.post(
   questionValidators,
   validateRequest,
   async (req, res) => {
-    const currentMax = await Question.findOne().sort({ qid: -1 }).select("qid");
-    const nextQid = Number(currentMax?.qid || 0) + 1;
-
-    const question = await Question.create({
-      qid: req.body.qid || nextQid,
+    const question = createQuestion({
+      qid: req.body.qid,
       title: req.body.title,
       pythonCode: req.body.pythonCode,
       difficulty: req.body.difficulty,
@@ -113,11 +100,10 @@ router.put(
   questionValidators,
   validateRequest,
   async (req, res) => {
-    const payload = {
+    const question = updateQuestion(req.params.id, {
       ...req.body,
       expectedTimeSeconds: Number(req.body.expectedTimeSeconds) || 900
-    };
-    const question = await Question.findByIdAndUpdate(req.params.id, payload, { new: true });
+    });
     if (!question) {
       return res.status(404).json({ message: "Not found" });
     }
@@ -126,20 +112,17 @@ router.put(
 );
 
 router.delete("/questions/:id", requireAdmin, async (req, res) => {
-  await Question.findByIdAndDelete(req.params.id);
+  deleteQuestion(req.params.id);
   res.json({ ok: true });
 });
 
 router.post("/reset", requireAdmin, async (_req, res) => {
-  await UserSession.deleteMany({});
-  await Question.updateMany({}, { $set: { assignedCount: 0 } });
+  resetSessionData();
   res.json({ ok: true });
 });
 
 router.get("/export", requireAdmin, async (_req, res) => {
-  const rows = await UserSession.find()
-    .sort({ createdAt: -1 })
-    .select("name rollNumber selectedLanguage scoreBreakdown timeTaken status");
+  const rows = getExportRows();
 
   const csv = stringify(
     rows.map((x) => ({
