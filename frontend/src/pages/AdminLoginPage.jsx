@@ -19,8 +19,13 @@ export default function AdminLoginPage() {
       const { data } = await api.post("/admin/login", { username, password });
       localStorage.setItem("arena_admin_token", data.token);
       navigate("/admin/dashboard");
-    } catch {
-      setError("Invalid credentials");
+    } catch (error) {
+      const message =
+        error.response?.data?.message ||
+        (error.request ? "Backend unreachable or blocked by CORS" : null) ||
+        error.message ||
+        "Login failed";
+      setError(message);
     }
   }
 
