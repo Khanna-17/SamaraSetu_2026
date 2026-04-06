@@ -32,6 +32,10 @@ export function createApp() {
 
   app.use(limiter);
 
+  app.get("/", (_req, res) => {
+    res.status(200).send("Code Translation Arena server is running. Check /api/health for API status.");
+  });
+
   app.get("/api/health", (_req, res) => {
     res.json({ ok: true, timestamp: new Date().toISOString() });
   });
