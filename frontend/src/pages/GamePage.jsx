@@ -19,6 +19,38 @@ const languageOptions = [
   { label: "JavaScript", value: "javascript", monaco: "javascript" }
 ];
 
+const boilerplates = {
+  c: `#include <stdio.h>
+
+int main(void) {
+    
+    return 0;
+}
+`,
+  cpp: `#include <iostream>
+using namespace std;
+
+int main() {
+    
+    return 0;
+}
+`,
+  java: `import java.util.*;
+
+public class Main {
+    public static void main(String[] args) {
+        
+    }
+}
+`,
+  javascript: `function solve() {
+    
+}
+
+solve();
+`
+};
+
 const clickSound = new Howl({
   src: ["https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg"],
   volume: 0.2
@@ -41,6 +73,7 @@ export default function GamePage() {
   const [fullscreenActive, setFullscreenActive] = useState(Boolean(document.fullscreenElement));
   const navigate = useNavigate();
   const autosaveRef = useRef({ selectedLanguage: "javascript", code: "", elapsed: 0 });
+  const hasAutoFullscreenAttemptedRef = useRef(false);
 
   const randomCheer = useMemo(() => cheers[Math.floor(Math.random() * cheers.length)], []);
 
@@ -48,7 +81,7 @@ export default function GamePage() {
     async function load() {
       const { data } = await api.get("/game/session");
       setSession(data.session);
-      setCode(data.session.code || "");
+      setCode(data.session.code || boilerplates[data.session.selectedLanguage || "javascript"] || "");
       setSelectedLanguage(data.session.selectedLanguage || "javascript");
       setTabSwitchCount(data.session.tabSwitchCount || 0);
       setCopyAttemptCount(data.session.copyAttemptCount || 0);
@@ -113,6 +146,15 @@ export default function GamePage() {
   }, [session]);
 
   useEffect(() => {
+    if (!session || hasAutoFullscreenAttemptedRef.current) {
+      return;
+    }
+
+    hasAutoFullscreenAttemptedRef.current = true;
+    toggleFullscreen(true);
+  }, [session]);
+
+  useEffect(() => {
     const interval = setInterval(() => {
       setElapsed((prev) => prev + 1);
     }, 1000);
@@ -122,6 +164,21 @@ export default function GamePage() {
   useEffect(() => {
     autosaveRef.current = { selectedLanguage, code, elapsed };
   }, [selectedLanguage, code, elapsed]);
+
+  useEffect(() => {
+    if (!session) {
+      return;
+    }
+
+    const preferredBoilerplate = boilerplates[selectedLanguage] || "";
+    const previousBoilerplate = boilerplates[session.selectedLanguage] || "";
+    const isUsingPreviousBoilerplate =
+      !code.trim() || code === previousBoilerplate;
+
+    if (isUsingPreviousBoilerplate && preferredBoilerplate && selectedLanguage !== session.selectedLanguage) {
+      setCode(preferredBoilerplate);
+    }
+  }, [selectedLanguage, session, code]);
 
   useEffect(() => {
     if (!session) {
@@ -257,7 +314,7 @@ export default function GamePage() {
     }
   }
 
-  async function toggleFullscreen() {
+  async function toggleFullscreen(silent = false) {
     try {
       if (!document.fullscreenElement) {
         await document.documentElement.requestFullscreen();
@@ -265,7 +322,9 @@ export default function GamePage() {
         await document.exitFullscreen();
       }
     } catch {
-      setGuardMessage("Fullscreen mode is unavailable in this browser.");
+      if (!silent) {
+        setGuardMessage("Fullscreen mode is unavailable in this browser.");
+      }
     }
   }
 
