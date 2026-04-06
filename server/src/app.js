@@ -25,7 +25,7 @@ export function createApp() {
 
   const limiter = rateLimit({
     windowMs: 60 * 1000,
-    max: 200,
+    max: 5000,
     standardHeaders: true,
     legacyHeaders: false
   });

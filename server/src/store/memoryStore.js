@@ -87,6 +87,8 @@ export function createSession({ name, rollNumber, resumeKey, assignedQuestionId,
       runtimeError: ""
     },
     tabSwitchCount: 0,
+    copyAttemptCount: 0,
+    pasteAttemptCount: 0,
     scoreBreakdown: {
       accuracyScore: 0,
       aiScore: 0,

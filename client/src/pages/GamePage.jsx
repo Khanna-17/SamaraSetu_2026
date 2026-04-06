@@ -33,6 +33,8 @@ export default function GamePage() {
   const [error, setError] = useState("");
   const [guardMessage, setGuardMessage] = useState("");
   const [tabSwitchCount, setTabSwitchCount] = useState(0);
+  const [copyAttemptCount, setCopyAttemptCount] = useState(0);
+  const [pasteAttemptCount, setPasteAttemptCount] = useState(0);
   const navigate = useNavigate();
   const autosaveRef = useRef({ selectedLanguage: "javascript", code: "", elapsed: 0 });
 
@@ -45,6 +47,8 @@ export default function GamePage() {
       setCode(data.session.code || "");
       setSelectedLanguage(data.session.selectedLanguage || "javascript");
       setTabSwitchCount(data.session.tabSwitchCount || 0);
+      setCopyAttemptCount(data.session.copyAttemptCount || 0);
+      setPasteAttemptCount(data.session.pasteAttemptCount || 0);
       if (data.session.startedAt) {
         const sec = Math.max(0, Math.floor((Date.now() - new Date(data.session.startedAt).getTime()) / 1000));
         setElapsed(sec);
@@ -55,7 +59,10 @@ export default function GamePage() {
           scoreBreakdown: data.session.scoreBreakdown,
           testReport: data.session.testReport,
           aiEvaluation: data.session.aiEvaluation,
-          attemptSummary: data.session.attemptSummary
+          attemptSummary: data.session.attemptSummary,
+          tabSwitchCount: data.session.tabSwitchCount || 0,
+          copyAttemptCount: data.session.copyAttemptCount || 0,
+          pasteAttemptCount: data.session.pasteAttemptCount || 0
         }));
         navigate("/result", { replace: true });
       }
@@ -122,6 +129,13 @@ export default function GamePage() {
 
     function handleClipboardEvent(event) {
       event.preventDefault();
+      const actionType = event.type === "paste" ? "paste" : "copy";
+
+      api.post("/game/clipboard-attempt", { type: actionType }).then(({ data }) => {
+        setCopyAttemptCount(data.copyAttemptCount || 0);
+        setPasteAttemptCount(data.pasteAttemptCount || 0);
+      }).catch(() => {});
+
       showGuardMessage("Copy, cut, and paste are disabled during the challenge.");
     }
 
@@ -208,7 +222,7 @@ export default function GamePage() {
   const monacoLanguage = languageOptions.find((x) => x.value === selectedLanguage)?.monaco || "javascript";
 
   return (
-    <main className="relative min-h-screen bg-black px-4 py-4 text-amber-50">
+    <main className="relative min-h-screen select-none bg-black px-4 py-4 text-amber-50">
       <ParticleBackground />
       <div className="relative mx-auto flex max-w-[1400px] flex-col gap-4">
         <GlassCard className="space-y-4">
@@ -226,7 +240,7 @@ export default function GamePage() {
         <div className="grid min-h-[62vh] gap-4 lg:grid-cols-2">
           <GlassCard className="flex min-h-[300px] flex-col">
             <div className="mb-3 text-xs uppercase tracking-[0.2em] text-amber-400">Python Source (Read-only)</div>
-            <div className="flex-1 overflow-hidden rounded-2xl border border-amber-300/18">
+            <div className="flex-1 overflow-hidden rounded-2xl border border-amber-300/18 [user-select:none] [&_*]:select-none">
               <Editor
                 theme="vs-dark"
                 language="python"
@@ -257,7 +271,7 @@ export default function GamePage() {
                 language={monacoLanguage}
                 value={code}
                 onChange={(value) => setCode(value || "")}
-                options={{ minimap: { enabled: false }, fontSize: 14 }}
+                options={{ minimap: { enabled: false }, fontSize: 14, selectionClipboard: false }}
               />
             </div>
           </GlassCard>
@@ -267,6 +281,8 @@ export default function GamePage() {
           <NeonButton onClick={submitCode} disabled={submitting}>{submitting ? "Evaluating..." : "Submit Translation"}</NeonButton>
           <span className="text-sm text-slate-300">Auto-save: {saving ? "syncing..." : "active"}</span>
           <span className="text-sm text-slate-300">Tab switches: {tabSwitchCount}</span>
+          <span className="text-sm text-slate-300">Copy attempts: {copyAttemptCount}</span>
+          <span className="text-sm text-slate-300">Paste attempts: {pasteAttemptCount}</span>
           {guardMessage ? <span className="text-sm text-red-300">{guardMessage}</span> : null}
           {error ? <span className="text-sm text-rose-300">{error}</span> : null}
         </motion.div>

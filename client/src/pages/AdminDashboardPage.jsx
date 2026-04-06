@@ -156,6 +156,8 @@ export default function AdminDashboardPage() {
                     <th>Score</th>
                     <th>Time</th>
                     <th>Tab Switches</th>
+                    <th>Copies</th>
+                    <th>Pastes</th>
                     <th>Status</th>
                   </tr>
                 </thead>
@@ -168,6 +170,8 @@ export default function AdminDashboardPage() {
                       <td>{p.scoreBreakdown?.finalScore || 0}</td>
                       <td>{p.timeTaken || 0}s</td>
                       <td>{p.tabSwitchCount || 0}</td>
+                      <td>{p.copyAttemptCount || 0}</td>
+                      <td>{p.pasteAttemptCount || 0}</td>
                       <td>{p.status}</td>
                     </tr>
                   ))}
@@ -187,6 +191,8 @@ export default function AdminDashboardPage() {
                 <p><strong>Score:</strong> {detail.scoreBreakdown?.finalScore || 0}</p>
                 <p><strong>Tests:</strong> {detail.testReport?.passed || 0}/{detail.testReport?.total || 0}</p>
                 <p><strong>Tab switches:</strong> {detail.tabSwitchCount || 0}</p>
+                <p><strong>Copy attempts:</strong> {detail.copyAttemptCount || 0}</p>
+                <p><strong>Paste attempts:</strong> {detail.pasteAttemptCount || 0}</p>
                 <p><strong>Feedback:</strong> {detail.aiEvaluation?.feedback || ""}</p>
                 <pre className="max-h-44 overflow-auto rounded-xl border border-amber-300/20 bg-black/45 p-2 text-xs text-amber-100">{detail.code}</pre>
               </div>

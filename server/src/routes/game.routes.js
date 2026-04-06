@@ -180,7 +180,9 @@ router.post(
         finalScore,
         status: updatedSession.status,
         timeTaken,
-        tabSwitchCount: updatedSession.tabSwitchCount || 0
+        tabSwitchCount: updatedSession.tabSwitchCount || 0,
+        copyAttemptCount: updatedSession.copyAttemptCount || 0,
+        pasteAttemptCount: updatedSession.pasteAttemptCount || 0
       });
       io.to("leaderboard-room").emit("leaderboard-refresh");
     }
@@ -221,6 +223,48 @@ router.post("/tab-switch", requireUser, async (req, res) => {
 
   return res.json({ ok: true, tabSwitchCount: updatedSession.tabSwitchCount || 0 });
 });
+
+router.post(
+  "/clipboard-attempt",
+  requireUser,
+  [body("type").isIn(["copy", "paste"])],
+  validateRequest,
+  async (req, res) => {
+    const session = getSessionById(req.user.sessionId);
+    if (!session || session.status !== "in-progress") {
+      return res.status(404).json({ message: "Session not found" });
+    }
+
+    const updates =
+      req.body.type === "copy"
+        ? { copyAttemptCount: Number(session.copyAttemptCount || 0) + 1 }
+        : { pasteAttemptCount: Number(session.pasteAttemptCount || 0) + 1 };
+
+    const updatedSession = updateSession(req.user.sessionId, updates);
+
+    const io = getIo();
+    if (io) {
+      io.to("admin-room").emit("participant-updated", {
+        id: updatedSession._id,
+        name: updatedSession.name,
+        rollNumber: updatedSession.rollNumber,
+        selectedLanguage: updatedSession.selectedLanguage,
+        finalScore: updatedSession.scoreBreakdown?.finalScore || 0,
+        status: updatedSession.status,
+        timeTaken: updatedSession.timeTaken,
+        tabSwitchCount: updatedSession.tabSwitchCount || 0,
+        copyAttemptCount: updatedSession.copyAttemptCount || 0,
+        pasteAttemptCount: updatedSession.pasteAttemptCount || 0
+      });
+    }
+
+    return res.json({
+      ok: true,
+      copyAttemptCount: updatedSession.copyAttemptCount || 0,
+      pasteAttemptCount: updatedSession.pasteAttemptCount || 0
+    });
+  }
+);
 
 router.post("/next-question", requireUser, async (req, res) => {
   const session = getSessionById(req.user.sessionId);
@@ -265,6 +309,9 @@ router.post("/next-question", requireUser, async (req, res) => {
       code: nextSession.code,
       startedAt: nextSession.startedAt,
       status: nextSession.status,
+      tabSwitchCount: nextSession.tabSwitchCount || 0,
+      copyAttemptCount: nextSession.copyAttemptCount || 0,
+      pasteAttemptCount: nextSession.pasteAttemptCount || 0,
       attemptSummary: getAttemptSummaryByRollNumber(nextSession.rollNumber),
       question: {
         id: question._id,

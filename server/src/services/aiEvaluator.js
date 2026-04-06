@@ -1,5 +1,3 @@
-import axios from "axios";
-
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, Number(value) || 0));
 }
@@ -195,9 +193,16 @@ Score ranges:
 - readability: 0-15`;
 
   try {
-    const response = await axios.post(
-      "https://api.openai.com/v1/chat/completions",
-      {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${openAiApiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
         model,
         temperature: 0.2,
         response_format: { type: "json_object" },
@@ -205,17 +210,18 @@ Score ranges:
           { role: "system", content: "You are a strict programming evaluator. Return only valid JSON." },
           { role: "user", content: prompt }
         ]
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${openAiApiKey}`,
-          "Content-Type": "application/json"
-        },
-        timeout: 30000
-      }
-    );
+      }),
+      signal: controller.signal
+    });
 
-    const payload = JSON.parse(response.data.choices?.[0]?.message?.content || "{}");
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`OpenAI request failed with status ${response.status}`);
+    }
+
+    const json = await response.json();
+    const payload = JSON.parse(json.choices?.[0]?.message?.content || "{}");
     return {
       functionalEquivalence: clamp(payload.functionalEquivalence, 0, 40),
       logicalCorrectness: clamp(payload.logicalCorrectness, 0, 20),
