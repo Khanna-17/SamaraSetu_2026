@@ -41,31 +41,31 @@ export default function EntryPage() {
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-slate-950 px-4 py-10 text-slate-100">
+    <main className="relative min-h-screen overflow-hidden bg-black px-4 py-10 text-amber-50">
       <ParticleBackground />
       <div className="relative mx-auto grid max-w-6xl gap-6 md:grid-cols-[1.3fr_1fr]">
         <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
           <GlassCard>
-            <p className="mb-2 text-xs uppercase tracking-[0.25em] text-cyan-300">Code Translation Arena</p>
-            <h1 className="font-display text-4xl leading-tight text-cyan-100 md:text-5xl">Translate Python. Beat the clock. Top the board.</h1>
-            <p className="mt-4 text-slate-300">One random Python challenge. One language target. Full scoring with hidden tests and AI logic analysis. Finish fast and climb the board.</p>
+            <p className="mb-2 text-xs uppercase tracking-[0.25em] text-amber-400">Code Translation Arena</p>
+            <h1 className="font-display text-4xl leading-tight text-amber-100 md:text-5xl">Translate Python. Beat the clock. Top the board.</h1>
+            <p className="mt-4 text-slate-300">Take on multiple Python challenges, translate them into your target language, and get scored with hidden tests plus AI feedback.</p>
 
             <form className="mt-8 space-y-4" onSubmit={onSubmit}>
-              <label className="block text-sm text-cyan-100">
+              <label className="block text-sm text-amber-100">
                 Name
                 <input
                   value={form.name}
                   onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
-                  className="mt-2 w-full rounded-xl border border-cyan-200/30 bg-slate-900/70 px-3 py-2 outline-none ring-cyan-300 transition focus:ring"
+                  className="mt-2 w-full rounded-xl border border-amber-300/25 bg-black/45 px-3 py-2 outline-none ring-amber-300 transition focus:ring"
                   placeholder="Your name"
                 />
               </label>
-              <label className="block text-sm text-cyan-100">
+              <label className="block text-sm text-amber-100">
                 Roll Number
                 <input
                   value={form.rollNumber}
                   onChange={(event) => setForm((prev) => ({ ...prev, rollNumber: event.target.value }))}
-                  className="mt-2 w-full rounded-xl border border-cyan-200/30 bg-slate-900/70 px-3 py-2 outline-none ring-cyan-300 transition focus:ring"
+                  className="mt-2 w-full rounded-xl border border-amber-300/25 bg-black/45 px-3 py-2 outline-none ring-amber-300 transition focus:ring"
                   placeholder="e.g. CS24-007"
                 />
               </label>
@@ -74,7 +74,7 @@ export default function EntryPage() {
 
               <div className="flex flex-wrap gap-3 pt-2">
                 <NeonButton type="submit" disabled={loading}>{loading ? "Entering..." : "Enter Arena"}</NeonButton>
-                <NeonButton type="button" className="border-fuchsia-300/50 bg-fuchsia-300/10 text-fuchsia-100" onClick={() => navigate("/admin")}>Admin</NeonButton>
+                <NeonButton type="button" className="border-red-800/60 bg-red-900/20 text-amber-100 hover:bg-red-900/35" onClick={() => navigate("/admin")}>Admin</NeonButton>
               </div>
             </form>
           </GlassCard>
@@ -82,7 +82,7 @@ export default function EntryPage() {
 
         <motion.div initial={{ opacity: 0, x: 18 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15, duration: 0.6 }}>
           <GlassCard className="h-full space-y-4">
-            <h2 className="font-display text-2xl text-cyan-100">Before You Start</h2>
+            <h2 className="font-display text-2xl text-amber-100">Before You Start</h2>
             <ul className="space-y-2 text-sm text-slate-300">
               <li>1. You get exactly one random Python question.</li>
               <li>2. Translate into C, C++, Java, or JavaScript.</li>
@@ -90,7 +90,7 @@ export default function EntryPage() {
               <li>4. AI checks logic and code quality.</li>
               <li>5. Faster completion gives time bonus.</li>
             </ul>
-            <p className="rounded-2xl border border-fuchsia-200/30 bg-fuchsia-950/20 p-4 text-sm text-slate-300">
+            <p className="rounded-2xl border border-red-900/40 bg-red-950/20 p-4 text-sm text-slate-300">
               Leaderboard access is available in the admin console only.
             </p>
           </GlassCard>

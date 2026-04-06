@@ -43,13 +43,13 @@ export default function LeaderboardPanel() {
   }, []);
 
   return (
-    <div className="rounded-2xl border border-fuchsia-200/40 bg-fuchsia-950/30 p-4">
-      <h3 className="mb-3 font-display text-lg text-fuchsia-100">Live Leaderboard</h3>
+    <div className="rounded-2xl border border-red-900/45 bg-red-950/30 p-4">
+      <h3 className="mb-3 font-display text-lg text-amber-100">Live Leaderboard</h3>
       <div className="max-h-56 space-y-2 overflow-auto pr-1">
         {error ? <p className="text-sm text-rose-300">{error}</p> : null}
         {rows.length === 0 ? <p className="text-sm text-slate-300">No finished runs yet.</p> : null}
         {rows.map((row) => (
-          <div key={`${row.rollNumber}-${row.rank}`} className="flex items-center justify-between rounded-xl bg-slate-900/70 px-3 py-2 text-sm text-cyan-100">
+          <div key={`${row.rollNumber}-${row.rank}`} className="flex items-center justify-between rounded-xl bg-black/40 px-3 py-2 text-sm text-amber-100">
             <span>
               #{row.rank} {row.name}
             </span>

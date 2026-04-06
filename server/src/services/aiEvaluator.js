@@ -1,3 +1,5 @@
+import axios from "axios";
+
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, Number(value) || 0));
 }
@@ -154,9 +156,78 @@ function localEvaluate(sourcePython, userCode, targetLanguage) {
 
 export async function evaluateWithAi({ sourcePython, userCode, targetLanguage }) {
   const localScore = localEvaluate(sourcePython, userCode, targetLanguage);
+  const openAiApiKey = process.env.OPENAI_API_KEY || process.env.API;
 
-  return {
-    ...localScore,
-    feedback: buildFeedback(localScore)
-  };
+  if (!openAiApiKey) {
+    return {
+      ...localScore,
+      feedback: `${buildFeedback(localScore)} OpenAI API key not configured, so fallback scoring was used.`
+    };
+  }
+
+  const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
+  const prompt = `Evaluate this translated solution and return strict JSON only.
+
+Source Python:
+${sourcePython}
+
+Target language:
+${targetLanguage}
+
+User code:
+${userCode}
+
+Return:
+{
+  "functionalEquivalence": number,
+  "logicalCorrectness": number,
+  "timeComplexitySimilarity": number,
+  "spaceComplexitySimilarity": number,
+  "readability": number,
+  "feedback": "short constructive feedback"
+}
+
+Score ranges:
+- functionalEquivalence: 0-40
+- logicalCorrectness: 0-20
+- timeComplexitySimilarity: 0-15
+- spaceComplexitySimilarity: 0-10
+- readability: 0-15`;
+
+  try {
+    const response = await axios.post(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        model,
+        temperature: 0.2,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: "You are a strict programming evaluator. Return only valid JSON." },
+          { role: "user", content: prompt }
+        ]
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${openAiApiKey}`,
+          "Content-Type": "application/json"
+        },
+        timeout: 30000
+      }
+    );
+
+    const payload = JSON.parse(response.data.choices?.[0]?.message?.content || "{}");
+    return {
+      functionalEquivalence: clamp(payload.functionalEquivalence, 0, 40),
+      logicalCorrectness: clamp(payload.logicalCorrectness, 0, 20),
+      timeComplexitySimilarity: clamp(payload.timeComplexitySimilarity, 0, 15),
+      spaceComplexitySimilarity: clamp(payload.spaceComplexitySimilarity, 0, 10),
+      readability: clamp(payload.readability, 0, 15),
+      feedback: String(payload.feedback || buildFeedback(localScore))
+    };
+  } catch {
+    return {
+      ...localScore,
+      feedback: `${buildFeedback(localScore)} OpenAI scoring failed, so fallback scoring was used.`
+    };
+  }
 }

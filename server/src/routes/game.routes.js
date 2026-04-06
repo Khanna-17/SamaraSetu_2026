@@ -1,4 +1,5 @@
 import { Router } from "express";
+import jwt from "jsonwebtoken";
 import { body } from "express-validator";
 import { requireUser } from "../middleware/auth.js";
 import { validateRequest } from "../middleware/validate.js";
@@ -6,7 +7,15 @@ import { evaluateWithJudge0 } from "../services/judge0.js";
 import { evaluateWithAi } from "../services/aiEvaluator.js";
 import { computeAiTotal, computeFinalScore, computeTimeScore } from "../services/scoring.js";
 import { getIo } from "../config/socket.js";
-import { getQuestionById, getSessionById, updateSession } from "../store/memoryStore.js";
+import { pickFairQuestion } from "../services/questionSelector.js";
+import {
+  createSession,
+  getAttemptSummaryByRollNumber,
+  getAttemptedQuestionIdsByRollNumber,
+  getQuestionById,
+  getSessionById,
+  updateSession
+} from "../store/memoryStore.js";
 
 const router = Router();
 
@@ -26,6 +35,7 @@ router.get("/session", requireUser, async (req, res) => {
   }
 
   const assignedQuestion = getQuestionById(session.assignedQuestion);
+  const attemptSummary = getAttemptSummaryByRollNumber(session.rollNumber);
 
   return res.json({
     session: {
@@ -36,7 +46,9 @@ router.get("/session", requireUser, async (req, res) => {
       code: session.code,
       startedAt: session.startedAt,
       timeTaken: session.timeTaken,
+      tabSwitchCount: session.tabSwitchCount || 0,
       status: session.status,
+      attemptSummary,
       question: {
         id: assignedQuestion._id,
         title: assignedQuestion.title,
@@ -167,7 +179,8 @@ router.post(
         selectedLanguage,
         finalScore,
         status: updatedSession.status,
-        timeTaken
+        timeTaken,
+        tabSwitchCount: updatedSession.tabSwitchCount || 0
       });
       io.to("leaderboard-room").emit("leaderboard-refresh");
     }
@@ -176,9 +189,93 @@ router.post(
       scoreBreakdown: updatedSession.scoreBreakdown,
       testReport: updatedSession.testReport,
       aiEvaluation: updatedSession.aiEvaluation,
+      attemptSummary: getAttemptSummaryByRollNumber(updatedSession.rollNumber),
       judgeDiagnostics: judgeResult.diagnostics || {}
     });
   }
 );
+
+router.post("/tab-switch", requireUser, async (req, res) => {
+  const session = getSessionById(req.user.sessionId);
+  if (!session || session.status !== "in-progress") {
+    return res.status(404).json({ message: "Session not found" });
+  }
+
+  const updatedSession = updateSession(req.user.sessionId, {
+    tabSwitchCount: Number(session.tabSwitchCount || 0) + 1
+  });
+
+  const io = getIo();
+  if (io) {
+    io.to("admin-room").emit("participant-updated", {
+      id: updatedSession._id,
+      name: updatedSession.name,
+      rollNumber: updatedSession.rollNumber,
+      selectedLanguage: updatedSession.selectedLanguage,
+      finalScore: updatedSession.scoreBreakdown?.finalScore || 0,
+      status: updatedSession.status,
+      timeTaken: updatedSession.timeTaken,
+      tabSwitchCount: updatedSession.tabSwitchCount || 0
+    });
+  }
+
+  return res.json({ ok: true, tabSwitchCount: updatedSession.tabSwitchCount || 0 });
+});
+
+router.post("/next-question", requireUser, async (req, res) => {
+  const session = getSessionById(req.user.sessionId);
+
+  if (!session) {
+    return res.status(404).json({ message: "Session not found" });
+  }
+
+  if (session.status !== "submitted") {
+    return res.status(409).json({ message: "Submit the current question before starting the next one." });
+  }
+
+  const attemptedQuestionIds = getAttemptedQuestionIdsByRollNumber(session.rollNumber);
+  const attemptSummary = getAttemptSummaryByRollNumber(session.rollNumber);
+  if (!attemptSummary.canAttemptMore) {
+    return res.status(409).json({ message: "No more questions are available for this user." });
+  }
+
+  const question = await pickFairQuestion({ excludeQuestionIds: attemptedQuestionIds });
+  const nextSession = createSession({
+    name: session.name,
+    rollNumber: session.rollNumber,
+    resumeKey: session.resumeKey,
+    assignedQuestionId: question._id,
+    code: "",
+    selectedLanguage: "javascript"
+  });
+
+  const nextToken = jwt.sign(
+    { sessionId: nextSession._id.toString(), role: "user", rollNumber: nextSession.rollNumber },
+    process.env.JWT_SECRET,
+    { expiresIn: process.env.JWT_EXPIRES_IN || "12h" }
+  );
+
+  return res.json({
+    token: nextToken,
+    session: {
+      id: nextSession._id,
+      name: nextSession.name,
+      rollNumber: nextSession.rollNumber,
+      selectedLanguage: nextSession.selectedLanguage,
+      code: nextSession.code,
+      startedAt: nextSession.startedAt,
+      status: nextSession.status,
+      attemptSummary: getAttemptSummaryByRollNumber(nextSession.rollNumber),
+      question: {
+        id: question._id,
+        title: question.title,
+        hint: question.hint,
+        pythonCode: question.pythonCode,
+        difficulty: question.difficulty,
+        expectedTimeSeconds: question.expectedTimeSeconds
+      }
+    }
+  });
+});
 
 export default router;

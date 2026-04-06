@@ -4,7 +4,13 @@ import jwt from "jsonwebtoken";
 import { body } from "express-validator";
 import { validateRequest } from "../middleware/validate.js";
 import { pickFairQuestion } from "../services/questionSelector.js";
-import { createSession, getInProgressSessionByRollNumber, getQuestionById } from "../store/memoryStore.js";
+import {
+  createSession,
+  getAttemptSummaryByRollNumber,
+  getAttemptedQuestionIdsByRollNumber,
+  getInProgressSessionByRollNumber,
+  getQuestionById
+} from "../store/memoryStore.js";
 
 const router = Router();
 
@@ -28,7 +34,15 @@ router.post(
     }
 
     if (!session) {
-      const question = await pickFairQuestion();
+      const attemptedQuestionIds = getAttemptedQuestionIdsByRollNumber(rollNumber);
+      const summary = getAttemptSummaryByRollNumber(rollNumber);
+      if (!summary.canAttemptMore && attemptedQuestionIds.length > 0) {
+        return res.status(409).json({
+          message: "All available questions have already been attempted for this roll number."
+        });
+      }
+
+      const question = await pickFairQuestion({ excludeQuestionIds: attemptedQuestionIds });
       session = createSession({
         name,
         rollNumber,
@@ -41,6 +55,8 @@ router.post(
     } else {
       session.assignedQuestion = getQuestionById(session.assignedQuestion);
     }
+
+    const attemptSummary = getAttemptSummaryByRollNumber(rollNumber);
 
     const token = jwt.sign(
       { sessionId: session._id.toString(), role: "user", rollNumber },
@@ -59,6 +75,7 @@ router.post(
         code: session.code,
         startedAt: session.startedAt,
         status: session.status,
+        attemptSummary,
         question: {
           id: session.assignedQuestion._id,
           title: session.assignedQuestion.title,

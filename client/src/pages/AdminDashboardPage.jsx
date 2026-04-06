@@ -131,7 +131,7 @@ export default function AdminDashboardPage() {
   const completionText = useMemo(() => `${analytics.completionRate || 0}%`, [analytics.completionRate]);
 
   return (
-    <main className="relative min-h-screen bg-slate-950 px-4 py-6 text-slate-100">
+    <main className="relative min-h-screen bg-black px-4 py-6 text-amber-50">
       <ParticleBackground />
       <div className="relative mx-auto flex max-w-7xl flex-col gap-4">
         <GlassCard className="grid gap-3 md:grid-cols-4">
@@ -145,16 +145,17 @@ export default function AdminDashboardPage() {
 
         <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
           <GlassCard>
-            <h2 className="font-display text-2xl text-cyan-100">Participants</h2>
+            <h2 className="font-display text-2xl text-amber-100">Participants</h2>
             <div className="mt-4 overflow-auto">
               <table className="w-full min-w-[680px] text-sm">
-                <thead className="text-left text-cyan-200">
+                <thead className="text-left text-amber-300">
                   <tr>
                     <th>Name</th>
                     <th>Roll</th>
                     <th>Language</th>
                     <th>Score</th>
                     <th>Time</th>
+                    <th>Tab Switches</th>
                     <th>Status</th>
                   </tr>
                 </thead>
@@ -166,6 +167,7 @@ export default function AdminDashboardPage() {
                       <td>{p.selectedLanguage}</td>
                       <td>{p.scoreBreakdown?.finalScore || 0}</td>
                       <td>{p.timeTaken || 0}s</td>
+                      <td>{p.tabSwitchCount || 0}</td>
                       <td>{p.status}</td>
                     </tr>
                   ))}
@@ -175,7 +177,7 @@ export default function AdminDashboardPage() {
           </GlassCard>
 
           <GlassCard className="space-y-4">
-            <h2 className="font-display text-2xl text-cyan-100">Participant Detail</h2>
+            <h2 className="font-display text-2xl text-amber-100">Participant Detail</h2>
             {!detail ? <p className="text-sm text-slate-300">Select a participant to inspect code, test reports, and AI feedback.</p> : null}
             {detail ? (
               <div className="space-y-2 text-sm text-slate-300">
@@ -184,17 +186,18 @@ export default function AdminDashboardPage() {
                 <p><strong>Question:</strong> {detail.assignedQuestion?.title}</p>
                 <p><strong>Score:</strong> {detail.scoreBreakdown?.finalScore || 0}</p>
                 <p><strong>Tests:</strong> {detail.testReport?.passed || 0}/{detail.testReport?.total || 0}</p>
+                <p><strong>Tab switches:</strong> {detail.tabSwitchCount || 0}</p>
                 <p><strong>Feedback:</strong> {detail.aiEvaluation?.feedback || ""}</p>
-                <pre className="max-h-44 overflow-auto rounded-xl border border-cyan-300/20 bg-slate-900 p-2 text-xs text-cyan-100">{detail.code}</pre>
+                <pre className="max-h-44 overflow-auto rounded-xl border border-amber-300/20 bg-black/45 p-2 text-xs text-amber-100">{detail.code}</pre>
               </div>
             ) : null}
-            <NeonButton className="border-emerald-300/50 bg-emerald-300/10 text-emerald-100" onClick={exportCsv}>Export CSV</NeonButton>
+            <NeonButton className="border-red-800/60 bg-red-900/20 text-amber-100 hover:bg-red-900/35" onClick={exportCsv}>Export CSV</NeonButton>
           </GlassCard>
         </div>
 
         <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
           <GlassCard>
-            <h2 className="font-display text-2xl text-cyan-100">Questions</h2>
+            <h2 className="font-display text-2xl text-amber-100">Questions</h2>
             <div className="mt-3 max-h-72 space-y-2 overflow-auto pr-1">
               {questions.map((question) => (
                 <div key={question._id} className="flex items-center justify-between rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm">
@@ -206,21 +209,21 @@ export default function AdminDashboardPage() {
           </GlassCard>
 
           <GlassCard className="space-y-3">
-            <h2 className="font-display text-2xl text-cyan-100">Add Question</h2>
-            <input placeholder="Title" value={editor.title} onChange={(e) => setEditor((prev) => ({ ...prev, title: e.target.value }))} className="w-full rounded-xl border border-cyan-200/30 bg-slate-900 px-3 py-2" />
-            <select value={editor.difficulty} onChange={(e) => setEditor((prev) => ({ ...prev, difficulty: e.target.value }))} className="w-full rounded-xl border border-cyan-200/30 bg-slate-900 px-3 py-2">
+            <h2 className="font-display text-2xl text-amber-100">Add Question</h2>
+            <input placeholder="Title" value={editor.title} onChange={(e) => setEditor((prev) => ({ ...prev, title: e.target.value }))} className="w-full rounded-xl border border-amber-300/25 bg-black/45 px-3 py-2" />
+            <select value={editor.difficulty} onChange={(e) => setEditor((prev) => ({ ...prev, difficulty: e.target.value }))} className="w-full rounded-xl border border-amber-300/25 bg-black/45 px-3 py-2">
               <option value="easy">easy</option>
               <option value="medium">medium</option>
               <option value="hard">hard</option>
             </select>
-            <input placeholder="Hint" value={editor.hint} onChange={(e) => setEditor((prev) => ({ ...prev, hint: e.target.value }))} className="w-full rounded-xl border border-cyan-200/30 bg-slate-900 px-3 py-2" />
-            <input type="number" min="30" max="7200" placeholder="Expected time (seconds)" value={editor.expectedTimeSeconds} onChange={(e) => setEditor((prev) => ({ ...prev, expectedTimeSeconds: e.target.value }))} className="w-full rounded-xl border border-cyan-200/30 bg-slate-900 px-3 py-2" />
-            <textarea placeholder="Python code" value={editor.pythonCode} onChange={(e) => setEditor((prev) => ({ ...prev, pythonCode: e.target.value }))} className="h-32 w-full rounded-xl border border-cyan-200/30 bg-slate-900 px-3 py-2" />
-            <textarea placeholder="Test cases JSON" value={editor.testCasesText} onChange={(e) => setEditor((prev) => ({ ...prev, testCasesText: e.target.value }))} className="h-36 w-full rounded-xl border border-cyan-200/30 bg-slate-900 px-3 py-2 font-mono text-xs" />
+            <input placeholder="Hint" value={editor.hint} onChange={(e) => setEditor((prev) => ({ ...prev, hint: e.target.value }))} className="w-full rounded-xl border border-amber-300/25 bg-black/45 px-3 py-2" />
+            <input type="number" min="30" max="7200" placeholder="Expected time (seconds)" value={editor.expectedTimeSeconds} onChange={(e) => setEditor((prev) => ({ ...prev, expectedTimeSeconds: e.target.value }))} className="w-full rounded-xl border border-amber-300/25 bg-black/45 px-3 py-2" />
+            <textarea placeholder="Python code" value={editor.pythonCode} onChange={(e) => setEditor((prev) => ({ ...prev, pythonCode: e.target.value }))} className="h-32 w-full rounded-xl border border-amber-300/25 bg-black/45 px-3 py-2" />
+            <textarea placeholder="Test cases JSON" value={editor.testCasesText} onChange={(e) => setEditor((prev) => ({ ...prev, testCasesText: e.target.value }))} className="h-36 w-full rounded-xl border border-amber-300/25 bg-black/45 px-3 py-2 font-mono text-xs" />
             {editorError ? <p className="text-sm text-rose-300">{editorError}</p> : null}
             <div className="flex gap-2">
               <NeonButton onClick={createQuestion}>Create</NeonButton>
-              <NeonButton className="border-rose-300/50 bg-rose-300/10 text-rose-100" onClick={resetGame}>Reset Game</NeonButton>
+              <NeonButton className="border-red-950/70 bg-red-950/35 text-red-200 hover:bg-red-950/55" onClick={resetGame}>Reset Game</NeonButton>
             </div>
           </GlassCard>
         </div>
@@ -231,9 +234,9 @@ export default function AdminDashboardPage() {
 
 function Metric({ title, value }) {
   return (
-    <div className="rounded-2xl border border-cyan-300/30 bg-slate-900/70 p-4">
-      <p className="text-xs uppercase tracking-[0.2em] text-cyan-300">{title}</p>
-      <p className="mt-2 font-display text-3xl text-cyan-100">{value}</p>
+    <div className="rounded-2xl border border-amber-300/25 bg-black/35 p-4">
+      <p className="text-xs uppercase tracking-[0.2em] text-amber-400">{title}</p>
+      <p className="mt-2 font-display text-3xl text-amber-100">{value}</p>
     </div>
   );
 }

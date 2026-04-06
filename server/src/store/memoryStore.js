@@ -46,13 +46,16 @@ export function listQuestions() {
   return [...state.questions].sort((a, b) => a.qid - b.qid).map((question) => deepClone(question));
 }
 
-export function pickFairQuestion() {
-  if (state.questions.length === 0) {
+export function pickFairQuestion({ excludeQuestionIds = [] } = {}) {
+  const excluded = new Set(excludeQuestionIds);
+  const availableQuestions = state.questions.filter((question) => !excluded.has(question._id));
+
+  if (availableQuestions.length === 0) {
     throw new Error("No questions available");
   }
 
-  const minAssignedCount = Math.min(...state.questions.map((question) => question.assignedCount || 0));
-  const candidates = state.questions.filter((question) => (question.assignedCount || 0) === minAssignedCount);
+  const minAssignedCount = Math.min(...availableQuestions.map((question) => question.assignedCount || 0));
+  const candidates = availableQuestions.filter((question) => (question.assignedCount || 0) === minAssignedCount);
   const question = candidates[Math.floor(Math.random() * candidates.length)];
   question.assignedCount += 1;
   touch(question);
@@ -83,6 +86,7 @@ export function createSession({ name, rollNumber, resumeKey, assignedQuestionId,
       compileError: "",
       runtimeError: ""
     },
+    tabSwitchCount: 0,
     scoreBreakdown: {
       accuracyScore: 0,
       aiScore: 0,
@@ -122,6 +126,33 @@ export function getInProgressSessionByRollNumber(rollNumber) {
     (entry) => entry.rollNumber === rollNumber && entry.status === "in-progress"
   );
   return session ? deepClone(session) : null;
+}
+
+export function getAttemptedQuestionIdsByRollNumber(rollNumber) {
+  return Array.from(
+    new Set(
+      state.sessions
+        .filter((entry) => entry.rollNumber === rollNumber)
+        .map((entry) => entry.assignedQuestion)
+    )
+  );
+}
+
+export function getAttemptSummaryByRollNumber(rollNumber) {
+  const attempts = state.sessions.filter((entry) => entry.rollNumber === rollNumber);
+  const attemptedQuestionIds = getAttemptedQuestionIdsByRollNumber(rollNumber);
+  const submittedCount = attempts.filter((entry) => entry.status === "submitted").length;
+  const totalQuestions = state.questions.length;
+  const remainingQuestions = Math.max(totalQuestions - attemptedQuestionIds.length, 0);
+
+  return {
+    totalAttempts: attempts.length,
+    submittedCount,
+    attemptedQuestionCount: attemptedQuestionIds.length,
+    totalQuestions,
+    remainingQuestions,
+    canAttemptMore: remainingQuestions > 0
+  };
 }
 
 export function listParticipants() {
