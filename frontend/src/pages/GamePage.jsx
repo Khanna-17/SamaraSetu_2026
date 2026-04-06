@@ -38,6 +38,7 @@ export default function GamePage() {
   const [pasteAttemptCount, setPasteAttemptCount] = useState(0);
   const [attemptHistory, setAttemptHistory] = useState([]);
   const [contestState, setContestState] = useState({ mode: "live", message: "Contest is live." });
+  const [fullscreenActive, setFullscreenActive] = useState(Boolean(document.fullscreenElement));
   const navigate = useNavigate();
   const autosaveRef = useRef({ selectedLanguage: "javascript", code: "", elapsed: 0 });
 
@@ -95,6 +96,21 @@ export default function GamePage() {
       socket.off("contest-state-updated", onContestStateUpdated);
     };
   }, []);
+
+  useEffect(() => {
+    function handleFullscreenChange() {
+      const active = Boolean(document.fullscreenElement);
+      setFullscreenActive(active);
+      if (!active && session) {
+        setGuardMessage("Fullscreen exited. Re-enter exam mode to continue distraction-free.");
+      }
+    }
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    };
+  }, [session]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -241,36 +257,72 @@ export default function GamePage() {
     }
   }
 
+  async function toggleFullscreen() {
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+      } else {
+        await document.exitFullscreen();
+      }
+    } catch {
+      setGuardMessage("Fullscreen mode is unavailable in this browser.");
+    }
+  }
+
   if (!session) {
-    return <main className="grid min-h-screen place-items-center bg-black text-amber-100">Loading mission...</main>;
+    return <main className="grid min-h-screen place-items-center bg-black text-sky-100">Loading mission...</main>;
   }
 
   const monacoLanguage = languageOptions.find((x) => x.value === selectedLanguage)?.monaco || "javascript";
   const editingLocked = contestState.mode !== "live";
 
   return (
-    <main className="relative min-h-screen select-none bg-black px-4 py-4 text-amber-50">
+    <main className="relative min-h-screen select-none bg-black px-4 py-4 text-sky-50">
       <ParticleBackground />
       <div className="relative mx-auto flex max-w-[1400px] flex-col gap-4">
         <GlassCard className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-amber-400">{session.question.difficulty} challenge</p>
-              <h1 className="font-display text-2xl text-amber-100">{session.question.title}</h1>
+              <p className="text-xs uppercase tracking-[0.2em] text-sky-400">{session.question.difficulty} challenge • {session.question.category || "logic"}</p>
+              <h1 className="font-display text-2xl text-sky-100">{session.question.title}</h1>
               <p className="text-sm text-slate-300">Hint: {session.question.hint}</p>
             </div>
-            <p className="rounded-xl border border-red-800/40 bg-red-900/18 px-3 py-2 text-sm text-amber-100">{randomCheer}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <NeonButton className="px-3 py-2 text-sm" onClick={toggleFullscreen}>
+                {fullscreenActive ? "Exit Exam Mode" : "Enter Exam Mode"}
+              </NeonButton>
+              <p className="rounded-xl border border-sky-800/40 bg-sky-900/18 px-3 py-2 text-sm text-sky-100">{randomCheer}</p>
+            </div>
           </div>
           <TimerBar elapsed={elapsed} expectedSeconds={session.question.expectedTimeSeconds} />
-          <p className={`rounded-xl border px-3 py-2 text-sm ${editingLocked ? "border-red-900/50 bg-red-950/25 text-red-200" : "border-amber-300/20 bg-amber-100/5 text-amber-100"}`}>
+          <p className={`rounded-xl border px-3 py-2 text-sm ${editingLocked ? "border-slate-700/60 bg-slate-900/60 text-sky-200" : "border-sky-300/20 bg-sky-100/5 text-sky-100"}`}>
             {contestState.message || "Contest is live."}
           </p>
         </GlassCard>
 
+        <GlassCard>
+          <h3 className="font-display text-xl text-sky-100">Question Brief</h3>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <div className="rounded-2xl border border-sky-300/15 bg-black/35 p-4 text-sm text-slate-300">
+              <p className="text-sky-100">What to do</p>
+              <p className="mt-2">Translate the Python source exactly into {languageOptions.find((option) => option.value === selectedLanguage)?.label || "your selected language"}.</p>
+              <p className="mt-2">Keep the same input and output behavior, including edge cases.</p>
+            </div>
+            <div className="rounded-2xl border border-sky-300/15 bg-black/35 p-4 text-sm text-slate-300">
+              <p className="text-sky-100">Before you submit</p>
+              <ul className="mt-2 space-y-1">
+                <li>Match the source program logic closely.</li>
+                <li>Print only the final expected output.</li>
+                <li>Check how empty input or single values behave.</li>
+              </ul>
+            </div>
+          </div>
+        </GlassCard>
+
         <div className="grid min-h-[62vh] gap-4 lg:grid-cols-2">
           <GlassCard className="flex min-h-[300px] flex-col">
-            <div className="mb-3 text-xs uppercase tracking-[0.2em] text-amber-400">Python Source (Read-only)</div>
-            <div className="flex-1 overflow-hidden rounded-2xl border border-amber-300/18 [user-select:none] [&_*]:select-none">
+            <div className="mb-3 text-xs uppercase tracking-[0.2em] text-sky-400">Python Source (Read-only)</div>
+            <div className="flex-1 overflow-hidden rounded-2xl border border-sky-300/18 [user-select:none] [&_*]:select-none">
               <Editor
                 theme="vs-dark"
                 language="python"
@@ -282,11 +334,11 @@ export default function GamePage() {
 
           <GlassCard className="flex min-h-[300px] flex-col">
             <div className="mb-3 flex items-center justify-between gap-3">
-              <div className="text-xs uppercase tracking-[0.2em] text-amber-400">Your Translation</div>
+              <div className="text-xs uppercase tracking-[0.2em] text-sky-400">Your Translation</div>
               <select
                 value={selectedLanguage}
                 onChange={(event) => setSelectedLanguage(event.target.value)}
-                className="rounded-lg border border-amber-300/25 bg-black/55 px-2 py-1 text-sm text-amber-50"
+                className="rounded-lg border border-sky-300/25 bg-black/55 px-2 py-1 text-sm text-sky-50"
               >
                 {languageOptions.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -295,7 +347,7 @@ export default function GamePage() {
                 ))}
               </select>
             </div>
-            <div className="flex-1 overflow-hidden rounded-2xl border border-red-900/35">
+            <div className="flex-1 overflow-hidden rounded-2xl border border-sky-900/35">
               <Editor
                 theme="vs-dark"
                 language={monacoLanguage}
@@ -304,15 +356,16 @@ export default function GamePage() {
                 options={{ minimap: { enabled: false }, fontSize: 14, selectionClipboard: false, readOnly: editingLocked }}
               />
             </div>
+            <p className="mt-3 text-xs text-slate-400">Expected time: {session.question.expectedTimeSeconds}s • Final score uses testcase pass percentage only.</p>
           </GlassCard>
         </div>
 
         <GlassCard>
-          <h3 className="font-display text-xl text-amber-100">Attempt History</h3>
+          <h3 className="font-display text-xl text-sky-100">Attempt History</h3>
           <div className="mt-3 grid gap-2 md:grid-cols-2">
             {attemptHistory.length ? attemptHistory.map((attempt) => (
-              <div key={attempt.sessionId} className="rounded-xl border border-amber-300/15 bg-black/35 p-3 text-sm text-slate-300">
-                <p className="text-amber-100">Attempt {attempt.attemptNumber}: {attempt.questionTitle}</p>
+              <div key={attempt.sessionId} className="rounded-xl border border-sky-300/15 bg-black/35 p-3 text-sm text-slate-300">
+                <p className="text-sky-100">Attempt {attempt.attemptNumber}: {attempt.questionTitle}</p>
                 <p>{attempt.difficulty} • {attempt.category}</p>
                 <p>{attempt.passed}/{attempt.total} tests • Score {attempt.finalScore}</p>
               </div>

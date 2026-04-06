@@ -3,14 +3,14 @@
 
 :root {
   color-scheme: dark;
-  --bg-primary: #050505;
-  --bg-secondary: #120909;
-  --panel-bg: rgba(22, 12, 6, 0.78);
-  --panel-border: rgba(212, 175, 55, 0.28);
-  --text-primary: #f7e7b2;
-  --text-secondary: #d8c08b;
-  --accent-gold: #d4af37;
-  --accent-red: #9f1d1d;
+  --bg-primary: #03060c;
+  --bg-secondary: #07111f;
+  --panel-bg: rgba(8, 18, 32, 0.82);
+  --panel-border: rgba(132, 189, 255, 0.24);
+  --text-primary: #dceeff;
+  --text-secondary: #9fbddd;
+  --accent-blue: #6ea8ff;
+  --accent-steel: #9ac4e8;
 }
 
 * {
@@ -21,9 +21,9 @@ body {
   margin: 0;
   font-family: "Exo 2", sans-serif;
   background:
-    radial-gradient(circle at top, rgba(212, 175, 55, 0.08), transparent 32%),
-    radial-gradient(circle at bottom right, rgba(159, 29, 29, 0.16), transparent 28%),
-    linear-gradient(180deg, #090909 0%, #140909 100%);
+    radial-gradient(circle at top, rgba(110, 168, 255, 0.1), transparent 32%),
+    radial-gradient(circle at bottom right, rgba(39, 88, 153, 0.18), transparent 28%),
+    linear-gradient(180deg, #03060c 0%, #081221 100%);
   color: var(--text-primary);
 }
 

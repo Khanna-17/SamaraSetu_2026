@@ -164,7 +164,7 @@ export default function AdminDashboardPage() {
   const completionText = useMemo(() => `${analytics.completionRate || 0}%`, [analytics.completionRate]);
 
   return (
-    <main className="relative min-h-screen bg-black px-4 py-6 text-amber-50">
+    <main className="relative min-h-screen bg-black px-4 py-6 text-sky-50">
       <ParticleBackground />
       <div className="relative mx-auto flex max-w-7xl flex-col gap-4">
         <GlassCard className="grid gap-3 md:grid-cols-4">
@@ -177,15 +177,15 @@ export default function AdminDashboardPage() {
         <GlassCard className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="font-display text-2xl text-amber-100">Contest Controls</h2>
+              <h2 className="font-display text-2xl text-sky-100">Contest Controls</h2>
               <p className="text-sm text-slate-300">{contestState.message}</p>
             </div>
-            <p className="rounded-xl border border-amber-300/20 bg-black/35 px-3 py-2 text-sm text-amber-100">Mode: {contestState.mode}</p>
+            <p className="rounded-xl border border-sky-300/20 bg-black/35 px-3 py-2 text-sm text-sky-100">Mode: {contestState.mode}</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <NeonButton onClick={() => changeContestState("live")}>Go Live</NeonButton>
-            <NeonButton className="border-amber-700/50 bg-amber-900/20 text-amber-100 hover:bg-amber-900/35" onClick={() => changeContestState("paused")}>Pause</NeonButton>
-            <NeonButton className="border-red-950/70 bg-red-950/35 text-red-200 hover:bg-red-950/55" onClick={() => changeContestState("stopped")}>Stop</NeonButton>
+            <NeonButton className="border-sky-700/50 bg-sky-900/20 text-sky-100 hover:bg-sky-900/35" onClick={() => changeContestState("paused")}>Pause</NeonButton>
+            <NeonButton className="border-slate-700/70 bg-slate-950/55 text-sky-200 hover:bg-slate-900/70" onClick={() => changeContestState("stopped")}>Stop</NeonButton>
           </div>
         </GlassCard>
 
@@ -193,10 +193,10 @@ export default function AdminDashboardPage() {
 
         <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
           <GlassCard>
-            <h2 className="font-display text-2xl text-amber-100">Participants</h2>
+            <h2 className="font-display text-2xl text-sky-100">Participants</h2>
             <div className="mt-4 overflow-auto">
               <table className="w-full min-w-[680px] text-sm">
-                <thead className="text-left text-amber-300">
+                <thead className="text-left text-sky-300">
                   <tr>
                     <th>Name</th>
                     <th>Roll</th>
@@ -229,7 +229,7 @@ export default function AdminDashboardPage() {
           </GlassCard>
 
           <GlassCard className="space-y-4">
-            <h2 className="font-display text-2xl text-amber-100">Participant Detail</h2>
+            <h2 className="font-display text-2xl text-sky-100">Participant Detail</h2>
             {!detail ? <p className="text-sm text-slate-300">Select a participant to inspect code, test reports, and AI feedback.</p> : null}
             {detail ? (
               <div className="space-y-2 text-sm text-slate-300">
@@ -248,9 +248,9 @@ export default function AdminDashboardPage() {
                 <p><strong>Missing signals:</strong> {(detail.testReport?.diagnostics?.missingQuestionSignals || []).join(", ") || "None"}</p>
                 {(detail.attemptHistory || []).length ? (
                   <div className="space-y-2 pt-2">
-                    <p className="text-amber-100">Attempt History</p>
+                    <p className="text-sky-100">Attempt History</p>
                     {(detail.attemptHistory || []).map((attempt) => (
-                      <div key={attempt.sessionId} className="rounded-xl border border-amber-300/15 bg-black/35 p-2 text-xs">
+                      <div key={attempt.sessionId} className="rounded-xl border border-sky-300/15 bg-black/35 p-2 text-xs">
                         <p>Attempt {attempt.attemptNumber}: {attempt.questionTitle}</p>
                         <p>{attempt.difficulty} • {attempt.category}</p>
                         <p>{attempt.passed}/{attempt.total} tests • Score {attempt.finalScore}</p>
@@ -260,9 +260,9 @@ export default function AdminDashboardPage() {
                 ) : null}
                 {(detail.testReport?.failedCases || []).length ? (
                   <div className="space-y-2 pt-2">
-                    <p className="text-amber-100">Failed Cases</p>
+                    <p className="text-sky-100">Failed Cases</p>
                     {(detail.testReport.failedCases || []).map((item, index) => (
-                      <div key={`${item.stdin}-${index}`} className="rounded-xl border border-red-900/35 bg-red-950/20 p-2 text-xs">
+                      <div key={`${item.stdin}-${index}`} className="rounded-xl border border-sky-900/35 bg-slate-950/50 p-2 text-xs">
                         <p>Input: {item.stdin || "[empty]"}</p>
                         <p>Expected: {item.expectedOutput || "[empty]"}</p>
                         <p>Observed: {item.actualOutput || "[empty]"}</p>
@@ -270,16 +270,16 @@ export default function AdminDashboardPage() {
                     ))}
                   </div>
                 ) : null}
-                <pre className="max-h-44 overflow-auto rounded-xl border border-amber-300/20 bg-black/45 p-2 text-xs text-amber-100">{detail.code}</pre>
+                <pre className="max-h-44 overflow-auto rounded-xl border border-sky-300/20 bg-black/45 p-2 text-xs text-sky-100">{detail.code}</pre>
               </div>
             ) : null}
-            <NeonButton className="border-red-800/60 bg-red-900/20 text-amber-100 hover:bg-red-900/35" onClick={exportCsv}>Export CSV</NeonButton>
+            <NeonButton className="border-sky-700/50 bg-sky-900/20 text-sky-100 hover:bg-sky-900/35" onClick={exportCsv}>Export CSV</NeonButton>
           </GlassCard>
         </div>
 
         <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
           <GlassCard>
-            <h2 className="font-display text-2xl text-amber-100">Questions</h2>
+            <h2 className="font-display text-2xl text-sky-100">Questions</h2>
             <div className="mt-3 max-h-72 space-y-2 overflow-auto pr-1">
               {questions.map((question) => (
                 <div key={question._id} className="flex items-center justify-between rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm">
@@ -291,22 +291,22 @@ export default function AdminDashboardPage() {
           </GlassCard>
 
           <GlassCard className="space-y-3">
-            <h2 className="font-display text-2xl text-amber-100">Add Question</h2>
-            <input placeholder="Title" value={editor.title} onChange={(e) => setEditor((prev) => ({ ...prev, title: e.target.value }))} className="w-full rounded-xl border border-amber-300/25 bg-black/45 px-3 py-2" />
-            <select value={editor.difficulty} onChange={(e) => setEditor((prev) => ({ ...prev, difficulty: e.target.value }))} className="w-full rounded-xl border border-amber-300/25 bg-black/45 px-3 py-2">
+            <h2 className="font-display text-2xl text-sky-100">Add Question</h2>
+            <input placeholder="Title" value={editor.title} onChange={(e) => setEditor((prev) => ({ ...prev, title: e.target.value }))} className="w-full rounded-xl border border-sky-300/25 bg-black/45 px-3 py-2" />
+            <select value={editor.difficulty} onChange={(e) => setEditor((prev) => ({ ...prev, difficulty: e.target.value }))} className="w-full rounded-xl border border-sky-300/25 bg-black/45 px-3 py-2">
               <option value="easy">easy</option>
               <option value="medium">medium</option>
               <option value="hard">hard</option>
             </select>
-            <input placeholder="Category (e.g. arrays, strings, recursion)" value={editor.category} onChange={(e) => setEditor((prev) => ({ ...prev, category: e.target.value }))} className="w-full rounded-xl border border-amber-300/25 bg-black/45 px-3 py-2" />
-            <input placeholder="Hint" value={editor.hint} onChange={(e) => setEditor((prev) => ({ ...prev, hint: e.target.value }))} className="w-full rounded-xl border border-amber-300/25 bg-black/45 px-3 py-2" />
-            <input type="number" min="30" max="7200" placeholder="Expected time (seconds)" value={editor.expectedTimeSeconds} onChange={(e) => setEditor((prev) => ({ ...prev, expectedTimeSeconds: e.target.value }))} className="w-full rounded-xl border border-amber-300/25 bg-black/45 px-3 py-2" />
-            <textarea placeholder="Python code" value={editor.pythonCode} onChange={(e) => setEditor((prev) => ({ ...prev, pythonCode: e.target.value }))} className="h-32 w-full rounded-xl border border-amber-300/25 bg-black/45 px-3 py-2" />
-            <textarea placeholder="Test cases JSON" value={editor.testCasesText} onChange={(e) => setEditor((prev) => ({ ...prev, testCasesText: e.target.value }))} className="h-36 w-full rounded-xl border border-amber-300/25 bg-black/45 px-3 py-2 font-mono text-xs" />
+            <input placeholder="Category (e.g. arrays, strings, recursion)" value={editor.category} onChange={(e) => setEditor((prev) => ({ ...prev, category: e.target.value }))} className="w-full rounded-xl border border-sky-300/25 bg-black/45 px-3 py-2" />
+            <input placeholder="Hint" value={editor.hint} onChange={(e) => setEditor((prev) => ({ ...prev, hint: e.target.value }))} className="w-full rounded-xl border border-sky-300/25 bg-black/45 px-3 py-2" />
+            <input type="number" min="30" max="7200" placeholder="Expected time (seconds)" value={editor.expectedTimeSeconds} onChange={(e) => setEditor((prev) => ({ ...prev, expectedTimeSeconds: e.target.value }))} className="w-full rounded-xl border border-sky-300/25 bg-black/45 px-3 py-2" />
+            <textarea placeholder="Python code" value={editor.pythonCode} onChange={(e) => setEditor((prev) => ({ ...prev, pythonCode: e.target.value }))} className="h-32 w-full rounded-xl border border-sky-300/25 bg-black/45 px-3 py-2" />
+            <textarea placeholder="Test cases JSON" value={editor.testCasesText} onChange={(e) => setEditor((prev) => ({ ...prev, testCasesText: e.target.value }))} className="h-36 w-full rounded-xl border border-sky-300/25 bg-black/45 px-3 py-2 font-mono text-xs" />
             {editorError ? <p className="text-sm text-rose-300">{editorError}</p> : null}
             <div className="flex gap-2">
               <NeonButton onClick={createQuestion}>Create</NeonButton>
-              <NeonButton className="border-red-950/70 bg-red-950/35 text-red-200 hover:bg-red-950/55" onClick={resetGame}>Reset Game</NeonButton>
+              <NeonButton className="border-slate-700/70 bg-slate-950/55 text-sky-200 hover:bg-slate-900/70" onClick={resetGame}>Reset Game</NeonButton>
             </div>
           </GlassCard>
         </div>
@@ -317,9 +317,9 @@ export default function AdminDashboardPage() {
 
 function Metric({ title, value }) {
   return (
-    <div className="rounded-2xl border border-amber-300/25 bg-black/35 p-4">
-      <p className="text-xs uppercase tracking-[0.2em] text-amber-400">{title}</p>
-      <p className="mt-2 font-display text-3xl text-amber-100">{value}</p>
+    <div className="rounded-2xl border border-sky-300/25 bg-black/35 p-4">
+      <p className="text-xs uppercase tracking-[0.2em] text-sky-400">{title}</p>
+      <p className="mt-2 font-display text-3xl text-sky-100">{value}</p>
     </div>
   );
 }
