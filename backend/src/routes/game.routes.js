@@ -69,12 +69,17 @@ function basicCompileCheck(code, language) {
     result.ok = false;
     result.messages.push("Kotlin program should include 'fun main'.");
   }
-
   if (result.ok) {
     result.messages.push("Basic compile checks passed.");
   }
 
   return result;
+}
+
+function isCompilationFailure(execution) {
+  const statusId = Number(execution?.statusId || 0);
+  const statusText = String(execution?.statusDescription || "").toLowerCase();
+  return statusId === 6 || statusText.includes("compilation error");
 }
 
 router.get("/session", requireUser, async (req, res) => {
@@ -210,14 +215,20 @@ router.post(
         stdin: ""
       });
 
-      if (execution.compileOutput) {
+      if (isCompilationFailure(execution)) {
         return res.json({
           ok: false,
-          messages: ["Compilation failed.", execution.compileOutput]
+          messages: [
+            "Compilation failed.",
+            String(execution.compileOutput || execution.stderr || execution.message || execution.statusDescription || "Unknown compile error")
+          ]
         });
       }
 
       const messages = ["Compilation successful on Judge0."];
+      if (execution.compileOutput) {
+        messages.push(`Compiler note: ${execution.compileOutput}`);
+      }
       if (execution.stderr) {
         messages.push(`Runtime warning: ${execution.stderr}`);
       }
@@ -281,19 +292,24 @@ router.post(
         stdin
       });
 
-      if (execution.compileOutput) {
+      if (isCompilationFailure(execution)) {
         return res.json({
           output: "",
-          notes: execution.compileOutput,
-          message: execution.compileOutput
+          notes: String(execution.compileOutput || execution.stderr || execution.message || execution.statusDescription || "Compilation failed."),
+          message: String(execution.compileOutput || execution.stderr || execution.message || execution.statusDescription || "Compilation failed.")
         });
       }
 
-      if (execution.stderr || execution.message) {
+      const warningText = [execution.compileOutput, execution.stderr, execution.message]
+        .map((x) => String(x || "").trim())
+        .filter(Boolean)
+        .join("\n");
+
+      if (warningText) {
         return res.json({
           output: String(execution.stdout || "").trim(),
-          notes: String(execution.stderr || execution.message || execution.statusDescription || "Runtime error"),
-          message: String(execution.stderr || execution.message || execution.statusDescription || "Runtime error")
+          notes: warningText,
+          message: warningText
         });
       }
 
