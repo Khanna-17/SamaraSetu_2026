@@ -114,6 +114,23 @@ function extractGeminiText(responseJson) {
     .trim();
 }
 
+function extractOpenRouterText(responseJson) {
+  const content = responseJson?.choices?.[0]?.message?.content;
+  const raw = Array.isArray(content)
+    ? content.map((part) => (typeof part === "string" ? part : part?.text || "")).join("")
+    : String(content || "");
+
+  return raw
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+}
+
+function isOpenRouterKey(apiKey = "") {
+  return String(apiKey || "").trim().startsWith("sk-or-");
+}
+
 async function callGeminiJson({ apiKey, model, prompt, timeoutMs = 30000 }) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -151,6 +168,53 @@ async function callGeminiJson({ apiKey, model, prompt, timeoutMs = 30000 }) {
   } finally {
     clearTimeout(timeoutId);
   }
+}
+
+async function callOpenRouterJson({ apiKey, model, prompt, timeoutMs = 30000 }) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": process.env.FRONTEND_URL?.split(",")?.[0] || "http://localhost:5173",
+        "X-Title": "Code Translation Arena"
+      },
+      body: JSON.stringify({
+        model: model || process.env.OPENROUTER_MODEL || "openrouter/free",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.1
+      }),
+      signal: controller.signal
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`API request failed with status ${response.status}: ${errorText}`);
+    }
+
+    const json = await response.json();
+    const text = extractOpenRouterText(json);
+    return JSON.parse(text || "{}");
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+async function callProviderJson({ apiKey, model, prompt, timeoutMs = 30000 }) {
+  if (isOpenRouterKey(apiKey)) {
+    return callOpenRouterJson({
+      apiKey,
+      model: process.env.OPENROUTER_MODEL || "openrouter/free",
+      prompt,
+      timeoutMs
+    });
+  }
+
+  return callGeminiJson({ apiKey, model, prompt, timeoutMs });
 }
 
 function localEvaluate(sourcePython, userCode, targetLanguage) {
@@ -248,7 +312,7 @@ Score ranges:
 - readability: 0-15`;
 
   try {
-    const payload = await callGeminiJson({
+    const payload = await callProviderJson({
       apiKey,
       model,
       prompt: `You are a strict programming evaluator. Return only valid JSON.\n\n${prompt}`
@@ -347,7 +411,7 @@ Rules:
 - Keep diagnostics scores in the range 0-100.`;
 
   try {
-    const payload = await callGeminiJson({
+    const payload = await callProviderJson({
       apiKey,
       model,
       prompt: `You are a strict testcase evaluator. Return only valid JSON.\n\n${prompt}`,
@@ -464,7 +528,7 @@ Rules:
 - Keep messages short and concrete.`;
 
   try {
-    const payload = await callGeminiJson({
+    const payload = await callProviderJson({
       apiKey,
       model,
       prompt: `You are a strict compile checker. Return only valid JSON.\n\n${prompt}`
@@ -531,7 +595,7 @@ Rules:
 - Do not wrap JSON in markdown.`;
 
   try {
-    const payload = await callGeminiJson({
+    const payload = await callProviderJson({
       apiKey,
       model,
       prompt: `You are a strict code execution simulator. Return only valid JSON.\n\n${prompt}`,

@@ -4,6 +4,7 @@ import { body } from "express-validator";
 import { requireUser } from "../middleware/auth.js";
 import { validateRequest } from "../middleware/validate.js";
 import { compileWithAi, evaluateTestCasesWithAi, evaluateWithAi, runCodeWithAi } from "../services/aiEvaluator.js";
+import { compileWithPiston, evaluateWithPiston, isPistonConfigured, runWithPiston } from "../services/piston.js";
 import { computeAiTotal, computeFinalScore, computeTimeScore } from "../services/scoring.js";
 import { getIo } from "../config/socket.js";
 import { pickFairQuestion } from "../services/questionSelector.js";
@@ -202,6 +203,7 @@ router.post(
     if (!session || session.status !== "in-progress") {
       return res.status(404).json({ message: "Session not found" });
     }
+    const assignedQuestion = getQuestionById(session.assignedQuestion);
 
     const selectedLanguage = req.body.selectedLanguage;
     if (!isAllowedLanguage(selectedLanguage)) {
@@ -221,21 +223,26 @@ router.post(
     }
 
     try {
-      const aiCompile = await compileWithAi({
-        sourcePython: assignedQuestion?.pythonCode || "",
-        userCode: code,
-        targetLanguage: selectedLanguage,
-        questionTitle: assignedQuestion?.title || ""
-      });
+      const compileResult = isPistonConfigured()
+        ? await compileWithPiston({
+            sourceCode: code,
+            language: selectedLanguage
+          })
+        : await compileWithAi({
+            sourcePython: assignedQuestion?.pythonCode || "",
+            userCode: code,
+            targetLanguage: selectedLanguage,
+            questionTitle: assignedQuestion?.title || ""
+          });
 
-      if (!aiCompile.ok) {
+      if (!compileResult.ok) {
         return res.json({
           ok: false,
-          messages: [...compile.messages, ...aiCompile.messages]
+          messages: [...compile.messages, ...compileResult.messages]
         });
       }
 
-      return res.json({ ok: true, messages: [...compile.messages, ...aiCompile.messages] });
+      return res.json({ ok: true, messages: [...compile.messages, ...compileResult.messages] });
     } catch (error) {
       return res.json({
         ok: false,
@@ -284,14 +291,19 @@ router.post(
     }
 
     try {
-      const preview = await runCodeWithAi({
-        sourcePython: assignedQuestion?.pythonCode || "",
-        userCode: code,
-        targetLanguage: selectedLanguage,
-        stdin
-        ,
-        questionTitle: assignedQuestion?.title || ""
-      });
+      const preview = isPistonConfigured()
+        ? await runWithPiston({
+            sourceCode: code,
+            language: selectedLanguage,
+            stdin
+          })
+        : await runCodeWithAi({
+            sourcePython: assignedQuestion?.pythonCode || "",
+            userCode: code,
+            targetLanguage: selectedLanguage,
+            stdin,
+            questionTitle: assignedQuestion?.title || ""
+          });
 
       return res.json({
         output: String(preview.output || ""),
@@ -355,13 +367,19 @@ router.post(
     }
 
     try {
-      const judgeResult = await evaluateTestCasesWithAi({
-        sourcePython: assignedQuestion.pythonCode,
-        userCode: code,
-        targetLanguage: selectedLanguage,
-        testCases: assignedQuestion.testCases,
-        questionTitle: assignedQuestion.title
-      });
+      const judgeResult = isPistonConfigured()
+        ? await evaluateWithPiston({
+            sourceCode: code,
+            language: selectedLanguage,
+            testCases: assignedQuestion.testCases
+          })
+        : await evaluateTestCasesWithAi({
+            sourcePython: assignedQuestion.pythonCode,
+            userCode: code,
+            targetLanguage: selectedLanguage,
+            testCases: assignedQuestion.testCases,
+            questionTitle: assignedQuestion.title
+          });
 
       const aiEvaluation = await evaluateWithAi({
         sourcePython: assignedQuestion.pythonCode,
