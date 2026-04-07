@@ -207,7 +207,7 @@ export async function evaluateWithAi({ sourcePython, userCode, targetLanguage })
     };
   }
 
-  const model = process.env.OPENAI_MODEL || process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
   const prompt = `Evaluate this translated solution and return strict JSON only.
 
 Source Python:
@@ -288,7 +288,7 @@ export async function evaluateTestCasesWithAi({ sourcePython, userCode, targetLa
     };
   }
 
-  const model = process.env.OPENAI_MODEL || process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
   const prompt = `You are evaluating whether a translated program would pass the following hidden testcases.
 
 Question title:
