@@ -105,6 +105,50 @@ function buildFeedback({ functionalEquivalence, logicalCorrectness, timeComplexi
   return notes.join(" ");
 }
 
+function extractGeminiText(responseJson) {
+  return responseJson?.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("") || "";
+}
+
+async function callGeminiJson({ apiKey, model, prompt, timeoutMs = 30000 }) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      {
+        method: "POST",
+        headers: {
+          "x-goog-api-key": apiKey,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [{ text: prompt }]
+            }
+          ],
+          generationConfig: {
+            temperature: 0.1,
+            responseMimeType: "application/json"
+          }
+        }),
+        signal: controller.signal
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`API request failed with status ${response.status}`);
+    }
+
+    const json = await response.json();
+    const text = extractGeminiText(json);
+    return JSON.parse(text || "{}");
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 function localEvaluate(sourcePython, userCode, targetLanguage) {
   const normalizedSource = normalize(sourcePython);
   const normalizedUser = normalize(userCode);
@@ -154,16 +198,16 @@ function localEvaluate(sourcePython, userCode, targetLanguage) {
 
 export async function evaluateWithAi({ sourcePython, userCode, targetLanguage }) {
   const localScore = localEvaluate(sourcePython, userCode, targetLanguage);
-  const openAiApiKey = process.env.OPENAI_API_KEY || process.env.API;
+  const apiKey = process.env.API;
 
-  if (!openAiApiKey) {
+  if (!apiKey) {
     return {
       ...localScore,
-      feedback: `${buildFeedback(localScore)} OpenAI API key not configured, so fallback scoring was used.`
+      feedback: `${buildFeedback(localScore)} API key not configured, so fallback scoring was used.`
     };
   }
 
-  const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
+  const model = process.env.OPENAI_MODEL || process.env.GEMINI_MODEL || "gemini-2.5-flash";
   const prompt = `Evaluate this translated solution and return strict JSON only.
 
 Source Python:
@@ -193,35 +237,11 @@ Score ranges:
 - readability: 0-15`;
 
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${openAiApiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0.2,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: "You are a strict programming evaluator. Return only valid JSON." },
-          { role: "user", content: prompt }
-        ]
-      }),
-      signal: controller.signal
+    const payload = await callGeminiJson({
+      apiKey,
+      model,
+      prompt: `You are a strict programming evaluator. Return only valid JSON.\n\n${prompt}`
     });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      throw new Error(`OpenAI request failed with status ${response.status}`);
-    }
-
-    const json = await response.json();
-    const payload = JSON.parse(json.choices?.[0]?.message?.content || "{}");
     return {
       functionalEquivalence: clamp(payload.functionalEquivalence, 0, 40),
       logicalCorrectness: clamp(payload.logicalCorrectness, 0, 20),
@@ -233,15 +253,15 @@ Score ranges:
   } catch {
     return {
       ...localScore,
-      feedback: `${buildFeedback(localScore)} OpenAI scoring failed, so fallback scoring was used.`
+      feedback: `${buildFeedback(localScore)} API scoring failed, so fallback scoring was used.`
     };
   }
 }
 
 export async function evaluateTestCasesWithAi({ sourcePython, userCode, targetLanguage, testCases, questionTitle = "" }) {
-  const openAiApiKey = process.env.OPENAI_API_KEY || process.env.API;
+  const apiKey = process.env.API;
 
-  if (!openAiApiKey) {
+  if (!apiKey) {
     return {
       passed: 0,
       total: Array.isArray(testCases) ? testCases.length : 0,
@@ -268,7 +288,7 @@ export async function evaluateTestCasesWithAi({ sourcePython, userCode, targetLa
     };
   }
 
-  const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
+  const model = process.env.OPENAI_MODEL || process.env.GEMINI_MODEL || "gemini-2.5-flash";
   const prompt = `You are evaluating whether a translated program would pass the following hidden testcases.
 
 Question title:
@@ -317,35 +337,12 @@ Rules:
 - Keep diagnostics scores in the range 0-100.`;
 
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 45000);
-
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${openAiApiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0.1,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: "You are a strict testcase evaluator. Return only valid JSON." },
-          { role: "user", content: prompt }
-        ]
-      }),
-      signal: controller.signal
+    const payload = await callGeminiJson({
+      apiKey,
+      model,
+      prompt: `You are a strict testcase evaluator. Return only valid JSON.\n\n${prompt}`,
+      timeoutMs: 45000
     });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      throw new Error(`API request failed with status ${response.status}`);
-    }
-
-    const json = await response.json();
-    const payload = JSON.parse(json.choices?.[0]?.message?.content || "{}");
     const normalizedDetails = (payload.details || []).slice(0, (testCases || []).length).map((item, index) => ({
       stdin: String(item.stdin ?? testCases[index]?.stdin ?? ""),
       expectedOutput: String(item.expectedOutput ?? testCases[index]?.expectedOutput ?? "").trim(),
