@@ -106,7 +106,12 @@ function buildFeedback({ functionalEquivalence, logicalCorrectness, timeComplexi
 }
 
 function extractGeminiText(responseJson) {
-  return responseJson?.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("") || "";
+  const raw = responseJson?.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("") || "";
+  return raw
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
 }
 
 async function callGeminiJson({ apiKey, model, prompt, timeoutMs = 30000 }) {
@@ -115,11 +120,10 @@ async function callGeminiJson({ apiKey, model, prompt, timeoutMs = 30000 }) {
 
   try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
       {
         method: "POST",
         headers: {
-          "x-goog-api-key": apiKey,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
@@ -129,8 +133,7 @@ async function callGeminiJson({ apiKey, model, prompt, timeoutMs = 30000 }) {
             }
           ],
           generationConfig: {
-            temperature: 0.1,
-            responseMimeType: "application/json"
+            temperature: 0.1
           }
         }),
         signal: controller.signal
@@ -138,7 +141,8 @@ async function callGeminiJson({ apiKey, model, prompt, timeoutMs = 30000 }) {
     );
 
     if (!response.ok) {
-      throw new Error(`API request failed with status ${response.status}`);
+      const errorText = await response.text();
+      throw new Error(`API request failed with status ${response.status}: ${errorText}`);
     }
 
     const json = await response.json();
