@@ -63,8 +63,12 @@ export default function GamePage() {
   const [elapsed, setElapsed] = useState(0);
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
   const [guardMessage, setGuardMessage] = useState("");
+  const [runInput, setRunInput] = useState("");
+  const [runOutput, setRunOutput] = useState("");
+  const [runNotes, setRunNotes] = useState("");
   const [tabSwitchCount, setTabSwitchCount] = useState(0);
   const [copyAttemptCount, setCopyAttemptCount] = useState(0);
   const [pasteAttemptCount, setPasteAttemptCount] = useState(0);
@@ -314,6 +318,27 @@ export default function GamePage() {
     }
   }
 
+  async function runCode() {
+    setRunning(true);
+    setError("");
+    setRunOutput("");
+    setRunNotes("");
+
+    try {
+      const { data } = await api.post("/game/run", {
+        selectedLanguage,
+        code,
+        stdin: runInput
+      });
+      setRunOutput(data.output || "");
+      setRunNotes(data.notes || "");
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || "Run failed");
+    } finally {
+      setRunning(false);
+    }
+  }
+
   async function toggleFullscreen(silent = false) {
     try {
       if (!document.fullscreenElement) {
@@ -357,6 +382,10 @@ export default function GamePage() {
           <p className={`rounded-xl border px-3 py-2 text-sm ${editingLocked ? "border-slate-700/60 bg-slate-900/60 text-sky-200" : "border-sky-300/20 bg-sky-100/5 text-sky-100"}`}>
             {contestState.message || "Contest is live."}
           </p>
+          <div className="flex flex-wrap gap-3">
+            <NeonButton onClick={runCode} disabled={running || editingLocked}>{running ? "Running..." : "Run"}</NeonButton>
+            <NeonButton onClick={submitCode} disabled={submitting || editingLocked}>{submitting ? "Evaluating..." : "Submit Translation"}</NeonButton>
+          </div>
         </GlassCard>
 
         <GlassCard>
@@ -374,6 +403,22 @@ export default function GamePage() {
                 <li>Print only the final expected output.</li>
                 <li>Check how empty input or single values behave.</li>
               </ul>
+            </div>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-[1.1fr_0.9fr]">
+            <div className="rounded-2xl border border-sky-300/15 bg-black/35 p-4">
+              <p className="text-sm text-sky-100">Run With Custom Input</p>
+              <textarea
+                value={runInput}
+                onChange={(event) => setRunInput(event.target.value)}
+                className="mt-3 h-28 w-full rounded-xl border border-sky-300/20 bg-black/45 px-3 py-2 font-mono text-sm text-sky-50 outline-none"
+                placeholder="Enter stdin here exactly as the program should receive it"
+              />
+            </div>
+            <div className="rounded-2xl border border-sky-300/15 bg-black/35 p-4">
+              <p className="text-sm text-sky-100">Run Output</p>
+              <pre className="mt-3 min-h-[84px] whitespace-pre-wrap break-words rounded-xl border border-sky-900/30 bg-slate-950/60 p-3 font-mono text-sm text-slate-200">{runOutput || "[no output yet]"}</pre>
+              {runNotes ? <p className="mt-3 text-xs text-slate-400">{runNotes}</p> : null}
             </div>
           </div>
         </GlassCard>
@@ -433,7 +478,6 @@ export default function GamePage() {
         </GlassCard>
 
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-wrap items-center gap-3">
-          <NeonButton onClick={submitCode} disabled={submitting || editingLocked}>{submitting ? "Evaluating..." : "Submit Translation"}</NeonButton>
           <span className="text-sm text-slate-300">Auto-save: {saving ? "syncing..." : "active"}</span>
           <span className="text-sm text-slate-300">Tab switches: {tabSwitchCount}</span>
           <span className="text-sm text-slate-300">Copy attempts: {copyAttemptCount}</span>

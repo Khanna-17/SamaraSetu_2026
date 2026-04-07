@@ -153,6 +153,27 @@ async function callGeminiJson({ apiKey, model, prompt, timeoutMs = 30000 }) {
   }
 }
 
+async function callGeminiJsonWithFallback({ apiKey, preferredModel, prompt, timeoutMs = 30000 }) {
+  const candidates = [
+    preferredModel,
+    "gemini-2.5-flash",
+    "gemini-1.5-flash"
+  ].filter(Boolean);
+
+  let lastError = null;
+
+  for (const model of candidates) {
+    try {
+      const payload = await callGeminiJson({ apiKey, model, prompt, timeoutMs });
+      return { payload, model };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error("Gemini API request failed");
+}
+
 function localEvaluate(sourcePython, userCode, targetLanguage) {
   const normalizedSource = normalize(sourcePython);
   const normalizedUser = normalize(userCode);
@@ -241,9 +262,9 @@ Score ranges:
 - readability: 0-15`;
 
   try {
-    const payload = await callGeminiJson({
+    const { payload } = await callGeminiJsonWithFallback({
       apiKey,
-      model,
+      preferredModel: model,
       prompt: `You are a strict programming evaluator. Return only valid JSON.\n\n${prompt}`
     });
     return {
@@ -341,9 +362,9 @@ Rules:
 - Keep diagnostics scores in the range 0-100.`;
 
   try {
-    const payload = await callGeminiJson({
+    const { payload } = await callGeminiJsonWithFallback({
       apiKey,
-      model,
+      preferredModel: model,
       prompt: `You are a strict testcase evaluator. Return only valid JSON.\n\n${prompt}`,
       timeoutMs: 45000
     });
@@ -410,6 +431,65 @@ Rules:
         languageWarnings: [],
         ioWarnings: []
       }
+    };
+  }
+}
+
+export async function predictOutputWithAi({ sourcePython, userCode, targetLanguage, stdin, questionTitle = "" }) {
+  const apiKey = process.env.API;
+
+  if (!apiKey) {
+    return {
+      output: "",
+      notes: "API key not configured for run preview."
+    };
+  }
+
+  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const prompt = `You are previewing the output of a translated program.
+
+Question title:
+${questionTitle}
+
+Source Python:
+${sourcePython}
+
+Target language:
+${targetLanguage}
+
+User code:
+${userCode}
+
+Custom stdin:
+${stdin}
+
+Return strict JSON only in this shape:
+{
+  "output": "predicted stdout only",
+  "notes": "short note about confidence or issue"
+}
+
+Rules:
+- Be strict.
+- If the code is incomplete or likely invalid, set output to an empty string and explain why in notes.
+- Do not include markdown fences.`;
+
+  try {
+    const { payload } = await callGeminiJsonWithFallback({
+      apiKey,
+      preferredModel: model,
+      prompt: `You are a strict code execution preview assistant. Return only valid JSON.\n\n${prompt}`,
+      timeoutMs: 45000
+    });
+
+    return {
+      output: String(payload.output || "").trim(),
+      notes: String(payload.notes || "").trim()
+    };
+  } catch (error) {
+    return {
+      output: "",
+      notes: String(error.message || "API evaluation failed").slice(0, 500)
     };
   }
 }

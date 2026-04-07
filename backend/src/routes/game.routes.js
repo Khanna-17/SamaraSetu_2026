@@ -3,7 +3,7 @@ import jwt from "jsonwebtoken";
 import { body } from "express-validator";
 import { requireUser } from "../middleware/auth.js";
 import { validateRequest } from "../middleware/validate.js";
-import { evaluateTestCasesWithAi, evaluateWithAi } from "../services/aiEvaluator.js";
+import { evaluateTestCasesWithAi, evaluateWithAi, predictOutputWithAi } from "../services/aiEvaluator.js";
 import { computeAiTotal, computeFinalScore, computeTimeScore } from "../services/scoring.js";
 import { getIo } from "../config/socket.js";
 import { pickFairQuestion } from "../services/questionSelector.js";
@@ -105,6 +105,38 @@ router.post(
     updateSession(req.user.sessionId, payload);
 
     res.json({ ok: true });
+  }
+);
+
+router.post(
+  "/run",
+  requireUser,
+  [
+    body("selectedLanguage").isIn(allowedLanguages),
+    body("code").isString().isLength({ min: 1, max: Number(process.env.MAX_CODE_LENGTH || 15000) }),
+    body("stdin").optional().isString().isLength({ max: 5000 })
+  ],
+  validateRequest,
+  async (req, res) => {
+    const session = getSessionById(req.user.sessionId);
+
+    if (!session) {
+      return res.status(404).json({ message: "Session not found" });
+    }
+
+    const assignedQuestion = getQuestionById(session.assignedQuestion);
+    const preview = await predictOutputWithAi({
+      sourcePython: assignedQuestion.pythonCode,
+      userCode: sanitizeCode(req.body.code),
+      targetLanguage: req.body.selectedLanguage,
+      stdin: String(req.body.stdin || ""),
+      questionTitle: assignedQuestion.title
+    });
+
+    return res.json({
+      output: preview.output,
+      notes: preview.notes
+    });
   }
 );
 
