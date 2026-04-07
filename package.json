@@ -1,5 +1,4 @@
 {
-<<<<<<< HEAD
   "name": "code-translation-arena-frontend",
   "private": true,
   "version": "1.0.0",
@@ -25,16 +24,5 @@
     "@tailwindcss/vite": "^4.0.14",
     "tailwindcss": "^4.0.14",
     "vite": "^6.2.0"
-=======
-  "name": "code-translation-arena",
-  "private": true,
-  "version": "1.0.0",
-  "scripts": {
-    "postinstall": "npm install --prefix backend && npm install --prefix frontend",
-    "start": "node start.js",
-    "dev": "node start.js",
-    "dev:backend": "npm run dev --prefix backend",
-    "dev:frontend": "npm run dev --prefix frontend"
->>>>>>> 3cfd1ca20ce639a4aa2c08f47115b433ade5cc4e
   }
 }
