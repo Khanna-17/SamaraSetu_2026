@@ -13,7 +13,7 @@ services:
     name: code-translation-arena-frontend
     rootDir: frontend
     buildCommand: npm install && npm run build
-    staticPublishPath: frontend/dist
+    staticPublishPath: dist
     autoDeploy: true
     routes:
       - type: rewrite
