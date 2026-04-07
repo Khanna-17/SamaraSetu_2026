@@ -237,3 +237,178 @@ Score ranges:
     };
   }
 }
+
+export async function evaluateTestCasesWithAi({ sourcePython, userCode, targetLanguage, testCases, questionTitle = "" }) {
+  const openAiApiKey = process.env.OPENAI_API_KEY || process.env.API;
+
+  if (!openAiApiKey) {
+    return {
+      passed: 0,
+      total: Array.isArray(testCases) ? testCases.length : 0,
+      accuracyScore: 0,
+      details: (testCases || []).map((testCase) => ({
+        stdin: testCase.stdin,
+        expectedOutput: String(testCase.expectedOutput || "").trim(),
+        actualOutput: "[api key not configured]",
+        status: "API key not configured",
+        passed: false
+      })),
+      compileError: "",
+      runtimeError: "API key not configured for testcase evaluation.",
+      evaluationMode: "ai-required",
+      diagnostics: {
+        structureScore: 0,
+        languageScore: 0,
+        questionScore: 0,
+        ioScore: 0,
+        missingQuestionSignals: [],
+        languageWarnings: [],
+        ioWarnings: []
+      }
+    };
+  }
+
+  const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
+  const prompt = `You are evaluating whether a translated program would pass the following hidden testcases.
+
+Question title:
+${questionTitle}
+
+Source Python:
+${sourcePython}
+
+Target language:
+${targetLanguage}
+
+User code:
+${userCode}
+
+Testcases:
+${JSON.stringify(testCases || [], null, 2)}
+
+Return strict JSON only in this shape:
+{
+  "passed": number,
+  "total": number,
+  "details": [
+    {
+      "stdin": "string",
+      "expectedOutput": "string",
+      "actualOutput": "short explanation or predicted output",
+      "status": "Passed or Failed with short reason",
+      "passed": true
+    }
+  ],
+  "diagnostics": {
+    "structureScore": number,
+    "languageScore": number,
+    "questionScore": number,
+    "ioScore": number,
+    "missingQuestionSignals": ["string"],
+    "languageWarnings": ["string"],
+    "ioWarnings": ["string"]
+  }
+}
+
+Rules:
+- Be strict.
+- Mark a testcase passed only if you are highly confident.
+- If the code is incomplete, syntactically broken, or likely wrong, fail the testcase.
+- Keep diagnostics scores in the range 0-100.`;
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45000);
+
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${openAiApiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0.1,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: "You are a strict testcase evaluator. Return only valid JSON." },
+          { role: "user", content: prompt }
+        ]
+      }),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`API request failed with status ${response.status}`);
+    }
+
+    const json = await response.json();
+    const payload = JSON.parse(json.choices?.[0]?.message?.content || "{}");
+    const normalizedDetails = (payload.details || []).slice(0, (testCases || []).length).map((item, index) => ({
+      stdin: String(item.stdin ?? testCases[index]?.stdin ?? ""),
+      expectedOutput: String(item.expectedOutput ?? testCases[index]?.expectedOutput ?? "").trim(),
+      actualOutput: String(item.actualOutput ?? "[not provided]").trim(),
+      status: String(item.status ?? (item.passed ? "Passed" : "Failed")).trim(),
+      passed: Boolean(item.passed)
+    }));
+    const total = Array.isArray(testCases) ? testCases.length : 0;
+    const passed = normalizedDetails.filter((item) => item.passed).length;
+
+    while (normalizedDetails.length < total) {
+      const testCase = testCases[normalizedDetails.length];
+      normalizedDetails.push({
+        stdin: String(testCase?.stdin || ""),
+        expectedOutput: String(testCase?.expectedOutput || "").trim(),
+        actualOutput: "[not evaluated]",
+        status: "Failed: incomplete API evaluation",
+        passed: false
+      });
+    }
+
+    return {
+      passed,
+      total,
+      accuracyScore: total ? Number(((passed / total) * 100).toFixed(2)) : 0,
+      details: normalizedDetails,
+      compileError: "",
+      runtimeError: "",
+      evaluationMode: "ai-testcase-eval",
+      diagnostics: {
+        structureScore: clamp(payload.diagnostics?.structureScore, 0, 100),
+        languageScore: clamp(payload.diagnostics?.languageScore, 0, 100),
+        questionScore: clamp(payload.diagnostics?.questionScore, 0, 100),
+        ioScore: clamp(payload.diagnostics?.ioScore, 0, 100),
+        missingQuestionSignals: Array.isArray(payload.diagnostics?.missingQuestionSignals) ? payload.diagnostics.missingQuestionSignals.map(String) : [],
+        languageWarnings: Array.isArray(payload.diagnostics?.languageWarnings) ? payload.diagnostics.languageWarnings.map(String) : [],
+        ioWarnings: Array.isArray(payload.diagnostics?.ioWarnings) ? payload.diagnostics.ioWarnings.map(String) : []
+      }
+    };
+  } catch (error) {
+    return {
+      passed: 0,
+      total: Array.isArray(testCases) ? testCases.length : 0,
+      accuracyScore: 0,
+      details: (testCases || []).map((testCase) => ({
+        stdin: testCase.stdin,
+        expectedOutput: String(testCase.expectedOutput || "").trim(),
+        actualOutput: "[api evaluation failed]",
+        status: "API evaluation failed",
+        passed: false
+      })),
+      compileError: "",
+      runtimeError: String(error.message || "API evaluation failed").slice(0, 500),
+      evaluationMode: "ai-required",
+      diagnostics: {
+        structureScore: 0,
+        languageScore: 0,
+        questionScore: 0,
+        ioScore: 0,
+        missingQuestionSignals: [],
+        languageWarnings: [],
+        ioWarnings: []
+      }
+    };
+  }
+}

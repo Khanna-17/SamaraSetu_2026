@@ -3,8 +3,7 @@ import jwt from "jsonwebtoken";
 import { body } from "express-validator";
 import { requireUser } from "../middleware/auth.js";
 import { validateRequest } from "../middleware/validate.js";
-import { evaluateWithJudge0 } from "../services/judge0.js";
-import { evaluateWithAi } from "../services/aiEvaluator.js";
+import { evaluateTestCasesWithAi, evaluateWithAi } from "../services/aiEvaluator.js";
 import { computeAiTotal, computeFinalScore, computeTimeScore } from "../services/scoring.js";
 import { getIo } from "../config/socket.js";
 import { pickFairQuestion } from "../services/questionSelector.js";
@@ -142,9 +141,9 @@ router.post(
     const timeTaken = req.body.timeTaken;
     const assignedQuestion = getQuestionById(session.assignedQuestion);
 
-    const judgeResult = await evaluateWithJudge0({
-      sourceCode: code,
-      language: selectedLanguage,
+    const judgeResult = await evaluateTestCasesWithAi({
+      userCode: code,
+      targetLanguage: selectedLanguage,
       testCases: assignedQuestion.testCases,
       sourcePython: assignedQuestion.pythonCode,
       questionTitle: assignedQuestion.title
