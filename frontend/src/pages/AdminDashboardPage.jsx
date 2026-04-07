@@ -201,7 +201,9 @@ export default function AdminDashboardPage() {
                     <th>Name</th>
                     <th>Roll</th>
                     <th>Language</th>
-                    <th>Score</th>
+                    <th>Total Score</th>
+                    <th>Questions</th>
+                    <th>Total Correct</th>
                     <th>Time</th>
                     <th>Tab Switches</th>
                     <th>Copies</th>
@@ -216,6 +218,8 @@ export default function AdminDashboardPage() {
                       <td>{p.rollNumber}</td>
                       <td>{p.selectedLanguage}</td>
                       <td>{p.scoreBreakdown?.finalScore || 0}</td>
+                      <td>{p.totalQuestionsAttempted || 0}</td>
+                      <td>{p.totalCorrect || 0}</td>
                       <td>{p.timeTaken || 0}s</td>
                       <td>{p.tabSwitchCount || 0}</td>
                       <td>{p.copyAttemptCount || 0}</td>
@@ -237,7 +241,9 @@ export default function AdminDashboardPage() {
                 <p><strong>Roll:</strong> {detail.rollNumber}</p>
                 <p><strong>Question:</strong> {detail.assignedQuestion?.title}</p>
                 <p><strong>Category:</strong> {detail.assignedQuestion?.category || "logic"}</p>
-                <p><strong>Score:</strong> {detail.scoreBreakdown?.finalScore || 0}</p>
+                <p><strong>Total score:</strong> {detail.scoreBreakdown?.finalScore || 0}</p>
+                <p><strong>Total questions attempted:</strong> {detail.totalQuestionsAttempted || 0}</p>
+                <p><strong>Total correct:</strong> {detail.totalCorrect || 0}</p>
                 <p><strong>Tests:</strong> {detail.testReport?.passed || 0}/{detail.testReport?.total || 0}</p>
                 <p><strong>Tab switches:</strong> {detail.tabSwitchCount || 0}</p>
                 <p><strong>Copy attempts:</strong> {detail.copyAttemptCount || 0}</p>

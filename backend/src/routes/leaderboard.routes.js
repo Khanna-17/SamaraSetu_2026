@@ -14,7 +14,9 @@ router.get("/live", requireAdmin, async (_req, res) => {
       rollNumber: user.rollNumber,
       selectedLanguage: user.selectedLanguage,
       finalScore: user.scoreBreakdown.finalScore,
-      timeTaken: user.timeTaken
+      timeTaken: user.timeTaken,
+      totalQuestionsAttempted: user.totalQuestionsAttempted || 0,
+      totalCorrect: user.totalCorrect || 0
     }))
   });
 });

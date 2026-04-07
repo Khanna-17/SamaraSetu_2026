@@ -52,6 +52,9 @@ export default function LeaderboardPanel() {
           <div key={`${row.rollNumber}-${row.rank}`} className="flex items-center justify-between rounded-xl bg-slate-950/70 px-3 py-2 text-sm text-sky-100">
             <span>
               #{row.rank} {row.name}
+              <span className="ml-2 text-xs text-slate-400">
+                {row.totalCorrect}/{row.totalQuestionsAttempted} correct
+              </span>
             </span>
             <span>{row.finalScore}</span>
           </div>

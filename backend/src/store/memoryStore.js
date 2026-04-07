@@ -65,6 +65,57 @@ const state = {
   }
 };
 
+function getLatestSession(sessions = []) {
+  return [...sessions].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0] || null;
+}
+
+function buildParticipantAggregate(rollNumber) {
+  const sessions = state.sessions.filter((entry) => entry.rollNumber === rollNumber);
+  if (!sessions.length) {
+    return null;
+  }
+
+  const latestSession = getLatestSession(sessions);
+  const attemptHistory = getAttemptHistoryByRollNumber(rollNumber);
+  const totalScore = Number(
+    sessions.reduce((sum, entry) => sum + Number(entry.scoreBreakdown?.finalScore || 0), 0).toFixed(2)
+  );
+  const totalQuestionsAttempted = sessions.length;
+  const totalCorrect = sessions.filter((entry) => {
+    const total = Number(entry.testReport?.total || 0);
+    return total > 0 && Number(entry.testReport?.passed || 0) === total;
+  }).length;
+
+  return {
+    _id: rollNumber,
+    sessionId: latestSession._id,
+    name: latestSession.name,
+    rollNumber: latestSession.rollNumber,
+    selectedLanguage: latestSession.selectedLanguage,
+    assignedQuestion: latestSession.assignedQuestion,
+    status: latestSession.status,
+    timeTaken: sessions.reduce((sum, entry) => sum + Number(entry.timeTaken || 0), 0),
+    tabSwitchCount: sessions.reduce((sum, entry) => sum + Number(entry.tabSwitchCount || 0), 0),
+    copyAttemptCount: sessions.reduce((sum, entry) => sum + Number(entry.copyAttemptCount || 0), 0),
+    pasteAttemptCount: sessions.reduce((sum, entry) => sum + Number(entry.pasteAttemptCount || 0), 0),
+    totalQuestionsAttempted,
+    totalCorrect,
+    attemptHistory,
+    scoreBreakdown: {
+      accuracyScore: latestSession.scoreBreakdown?.accuracyScore || 0,
+      aiScore: latestSession.scoreBreakdown?.aiScore || 0,
+      timeScore: latestSession.scoreBreakdown?.timeScore || 0,
+      finalScore: totalScore
+    },
+    aiEvaluation: latestSession.aiEvaluation,
+    testReport: latestSession.testReport,
+    code: latestSession.code,
+    createdAt: latestSession.createdAt,
+    updatedAt: latestSession.updatedAt,
+    submittedAt: latestSession.submittedAt
+  };
+}
+
 function touch(entity) {
   entity.updatedAt = new Date().toISOString();
 }
@@ -265,21 +316,15 @@ export function getAttemptHistoryByRollNumber(rollNumber) {
 }
 
 export function listParticipants() {
-  return [...state.sessions]
+  return Array.from(new Set(state.sessions.map((session) => session.rollNumber)))
+    .map((rollNumber) => buildParticipantAggregate(rollNumber))
+    .filter(Boolean)
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-    .map((session) => deepClone(session));
+    .map((participant) => deepClone(participant));
 }
 
 export function getParticipantDetail(sessionId) {
-  const session = getSessionById(sessionId);
-  if (!session) {
-    return null;
-  }
-
-  return {
-    ...session,
-    attemptHistory: getAttemptHistoryByRollNumber(session.rollNumber)
-  };
+  return deepClone(buildParticipantAggregate(sessionId));
 }
 
 export function getAnalytics() {
@@ -362,8 +407,8 @@ export function updateContestState(payload = {}) {
 }
 
 export function getLeaderboard() {
-  return state.sessions
-    .filter((session) => session.status === "submitted")
+  return listParticipants()
+    .filter((participant) => participant.totalQuestionsAttempted > 0)
     .sort((a, b) => {
       const scoreDiff = Number(b.scoreBreakdown?.finalScore || 0) - Number(a.scoreBreakdown?.finalScore || 0);
       if (scoreDiff !== 0) {
@@ -372,7 +417,7 @@ export function getLeaderboard() {
       return Number(a.timeTaken || 0) - Number(b.timeTaken || 0);
     })
     .slice(0, 20)
-    .map((session) => deepClone(session));
+    .map((participant) => deepClone(participant));
 }
 
 export function getExportRows() {
