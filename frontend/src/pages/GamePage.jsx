@@ -187,6 +187,19 @@ const clickSound = new Howl({
   volume: 0.2
 });
 
+function extractDiagnosticLines(text) {
+  return String(text || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => /error|exception|warning|line\s+\d+|:\d+:\d+|at\s+line\s+\d+/i.test(line));
+}
+
+function extractLineHints(text) {
+  const matches = String(text || "").match(/line\s+(\d+)|:(\d+):(\d+)/gi) || [];
+  return Array.from(new Set(matches));
+}
+
 export default function GamePage() {
   const [session, setSession] = useState(null);
   const [code, setCode] = useState("");
@@ -201,7 +214,8 @@ export default function GamePage() {
   const [runOutput, setRunOutput] = useState("");
   const [runNotes, setRunNotes] = useState("");
   const [compileMessages, setCompileMessages] = useState([]);
-  const [showConsolePopup, setShowConsolePopup] = useState(false);
+  const [showRunPopup, setShowRunPopup] = useState(false);
+  const [showCompilePopup, setShowCompilePopup] = useState(false);
   const [guardMessage, setGuardMessage] = useState("");
   const [tabSwitchCount, setTabSwitchCount] = useState(0);
   const [fullscreenExitCount, setFullscreenExitCount] = useState(0);
@@ -386,7 +400,8 @@ export default function GamePage() {
     function onEscape(event) {
       if (event.key === "Escape") {
         setShowCheatSheet(false);
-        setShowConsolePopup(false);
+        setShowRunPopup(false);
+        setShowCompilePopup(false);
       }
     }
 
@@ -520,7 +535,6 @@ export default function GamePage() {
   async function compileCode() {
     setError("");
     setCompiling(true);
-    setShowConsolePopup(true);
     setCompileMessages([]);
 
     try {
@@ -541,7 +555,6 @@ export default function GamePage() {
   async function runCodePreview() {
     setError("");
     setRunning(true);
-    setShowConsolePopup(true);
     setRunOutput("");
     setRunNotes("");
 
@@ -560,6 +573,16 @@ export default function GamePage() {
     } finally {
       setRunning(false);
     }
+  }
+
+  async function openRunPopup() {
+    setShowRunPopup(true);
+    await runCodePreview();
+  }
+
+  async function openCompilePopup() {
+    setShowCompilePopup(true);
+    await compileCode();
   }
 
   async function toggleFullscreen(silent = false) {
@@ -584,6 +607,11 @@ export default function GamePage() {
   const monacoLanguage = languageOptions.find((x) => x.value === selectedLanguage)?.monaco || "javascript";
   const editingLocked = contestState.mode !== "live";
   const sheet = cheatSheets[selectedLanguage] || { title: "Cheat Sheet", blocks: [] };
+  const runDiagnosticLines = extractDiagnosticLines(runNotes);
+  const runLineHints = extractLineHints(runNotes);
+  const compileDiagnosticText = compileMessages.join("\n");
+  const compileDiagnosticLines = extractDiagnosticLines(compileDiagnosticText);
+  const compileLineHints = extractLineHints(compileDiagnosticText);
   const sampleTestCases = Array.isArray(session.question?.sampleTestCases)
     ? session.question.sampleTestCases.slice(0, 5)
     : [];
@@ -704,10 +732,10 @@ export default function GamePage() {
                 <NeonButton className="px-3 py-1.5 text-xs" onClick={() => setShowCheatSheet(true)}>
                   Cheat Sheet
                 </NeonButton>
-                <NeonButton className="px-3 py-1.5 text-xs" onClick={runCodePreview} disabled={editingLocked || running}>
+                <NeonButton className="px-3 py-1.5 text-xs" onClick={openRunPopup} disabled={editingLocked || running}>
                   {running ? "Running..." : "Run"}
                 </NeonButton>
-                <NeonButton className="px-3 py-1.5 text-xs" onClick={compileCode} disabled={editingLocked || compiling}>
+                <NeonButton className="px-3 py-1.5 text-xs" onClick={openCompilePopup} disabled={editingLocked || compiling}>
                   {compiling ? "Compiling..." : "Compile"}
                 </NeonButton>
               </div>
@@ -783,15 +811,15 @@ export default function GamePage() {
         </div>
       ) : null}
 
-      {showConsolePopup ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4" onClick={() => setShowConsolePopup(false)}>
+      {showRunPopup ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4" onClick={() => setShowRunPopup(false)}>
           <div className="w-full max-w-4xl rounded-3xl border border-sky-300/35 bg-slate-950/95 p-6 shadow-[0_0_60px_rgba(37,99,235,0.35)]" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs uppercase tracking-[0.25em] text-sky-400">Code Check Console</p>
-                <h2 className="font-display text-3xl text-sky-100">Run and Compile</h2>
+                <p className="text-xs uppercase tracking-[0.25em] text-sky-400">Run Console</p>
+                <h2 className="font-display text-3xl text-sky-100">Run Preview</h2>
               </div>
-              <NeonButton className="px-3 py-2 text-sm" onClick={() => setShowConsolePopup(false)}>Close</NeonButton>
+              <NeonButton className="px-3 py-2 text-sm" onClick={() => setShowRunPopup(false)}>Close</NeonButton>
             </div>
 
             <div className="mt-5 grid gap-3 md:grid-cols-2">
@@ -807,24 +835,74 @@ export default function GamePage() {
                   <NeonButton className="px-3 py-1.5 text-xs" onClick={runCodePreview} disabled={editingLocked || running}>
                     {running ? "Running..." : "Run Preview"}
                   </NeonButton>
-                  <NeonButton className="px-3 py-1.5 text-xs" onClick={compileCode} disabled={editingLocked || compiling}>
-                    {compiling ? "Compiling..." : "Compile Check"}
-                  </NeonButton>
                 </div>
               </div>
 
               <div className="space-y-3">
                 <div className="rounded-2xl border border-sky-300/20 bg-black/45 p-4">
-                  <p className="text-sm font-semibold text-sky-100">Run Output</p>
+                  <p className="text-sm font-semibold text-sky-100">Program Output</p>
                   <pre className="mt-3 max-h-36 overflow-auto rounded-lg border border-sky-900/35 bg-slate-950/50 p-2 text-xs text-slate-200">{runOutput || "No run output yet."}</pre>
-                  <p className="mt-2 text-xs text-slate-400">{runNotes || "Run notes will appear here."}</p>
                 </div>
 
                 <div className="rounded-2xl border border-sky-300/20 bg-black/45 p-4">
+                  <p className="text-sm font-semibold text-sky-100">Run Diagnostics</p>
+                  <pre className="mt-3 max-h-24 overflow-auto rounded-lg border border-sky-900/35 bg-slate-950/50 p-2 text-xs text-amber-200">{runNotes || "No run notes."}</pre>
+                  <p className="mt-3 text-xs text-sky-200">Line References</p>
+                  <ul className="mt-2 max-h-24 space-y-1 overflow-auto text-xs text-rose-200">
+                    {(runLineHints.length ? runLineHints : ["No line reference found"]).map((item, idx) => (
+                      <li key={`${item}-${idx}`} className="rounded-lg border border-rose-900/45 bg-rose-950/30 px-2 py-1">{item}</li>
+                    ))}
+                  </ul>
+                  <p className="mt-3 text-xs text-sky-200">Detected Errors / Warnings</p>
+                  <ul className="mt-2 max-h-28 space-y-1 overflow-auto text-xs text-rose-200">
+                    {(runDiagnosticLines.length ? runDiagnosticLines : ["No error or warning detected"]).map((line, idx) => (
+                      <li key={`${line}-${idx}`} className="rounded-lg border border-rose-900/45 bg-rose-950/30 px-2 py-1">{line}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showCompilePopup ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4" onClick={() => setShowCompilePopup(false)}>
+          <div className="w-full max-w-4xl rounded-3xl border border-sky-300/35 bg-slate-950/95 p-6 shadow-[0_0_60px_rgba(37,99,235,0.35)]" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.25em] text-sky-400">Compile Console</p>
+                <h2 className="font-display text-3xl text-sky-100">Compile Check</h2>
+              </div>
+              <NeonButton className="px-3 py-2 text-sm" onClick={() => setShowCompilePopup(false)}>Close</NeonButton>
+            </div>
+
+            <div className="mt-5 space-y-3">
+              <div className="rounded-2xl border border-sky-300/20 bg-black/45 p-4">
+                <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-semibold text-sky-100">Compile Messages</p>
-                  <ul className="mt-3 max-h-36 space-y-2 overflow-auto text-xs text-slate-200">
-                    {(compileMessages.length ? compileMessages : ["No compile check yet."]).map((msg, idx) => (
-                      <li key={`${msg}-${idx}`} className="rounded-lg border border-sky-900/35 bg-slate-950/50 px-2 py-1">{msg}</li>
+                  <NeonButton className="px-3 py-1.5 text-xs" onClick={compileCode} disabled={editingLocked || compiling}>
+                    {compiling ? "Compiling..." : "Compile Check"}
+                  </NeonButton>
+                </div>
+                <pre className="mt-3 max-h-40 overflow-auto rounded-lg border border-sky-900/35 bg-slate-950/50 p-2 text-xs text-amber-200">{(compileMessages.length ? compileMessages.join("\n") : "No compile check yet.")}</pre>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-2xl border border-sky-300/20 bg-black/45 p-4">
+                  <p className="text-xs text-sky-200">Line References</p>
+                  <ul className="mt-2 max-h-28 space-y-1 overflow-auto text-xs text-rose-200">
+                    {(compileLineHints.length ? compileLineHints : ["No line reference found"]).map((item, idx) => (
+                      <li key={`${item}-${idx}`} className="rounded-lg border border-rose-900/45 bg-rose-950/30 px-2 py-1">{item}</li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="rounded-2xl border border-sky-300/20 bg-black/45 p-4">
+                  <p className="text-xs text-sky-200">Detected Errors / Warnings</p>
+                  <ul className="mt-2 max-h-28 space-y-1 overflow-auto text-xs text-rose-200">
+                    {(compileDiagnosticLines.length ? compileDiagnosticLines : ["No error or warning detected"]).map((line, idx) => (
+                      <li key={`${line}-${idx}`} className="rounded-lg border border-rose-900/45 bg-rose-950/30 px-2 py-1">{line}</li>
                     ))}
                   </ul>
                 </div>
