@@ -12,10 +12,13 @@ import {
   deleteQuestion,
   getActiveSlot,
   getAnalytics,
+  getClassicTranslationLanguages,
   getContestState,
   getAllowedTranslationLanguages,
+  getLanguageMode,
   getExportRows,
   getExportRowsBySlot,
+  getSlotTranslationLanguages,
   getParticipantDetail,
   listSlotLanguageAssignments,
   listParticipants,
@@ -24,6 +27,7 @@ import {
   startSlot,
   stopSlot,
   setSlotLanguageAssignment,
+  setLanguageMode,
   updateSlot,
   updateContestState,
   updateQuestion,
@@ -101,7 +105,10 @@ router.get("/slots", requireAdmin, async (_req, res) => {
   res.json({
     slots: listSlotLanguageAssignments(),
     activeSlot: getActiveSlot(),
-    allowedLanguages: getAllowedTranslationLanguages()
+    allowedLanguages: getAllowedTranslationLanguages(),
+    slotLanguages: getSlotTranslationLanguages(),
+    classicLanguages: getClassicTranslationLanguages(),
+    languageMode: getLanguageMode()
   });
 });
 
@@ -110,7 +117,7 @@ router.post(
   requireAdmin,
   [
     body("name").isString().trim().isLength({ min: 2, max: 80 }),
-    body("language").isIn(getAllowedTranslationLanguages())
+    body("language").isIn(getSlotTranslationLanguages())
   ],
   validateRequest,
   async (req, res) => {
@@ -127,7 +134,10 @@ router.post(
       slot,
       slots: listSlotLanguageAssignments(),
       activeSlot: getActiveSlot(),
-      allowedLanguages: getAllowedTranslationLanguages()
+      allowedLanguages: getAllowedTranslationLanguages(),
+      slotLanguages: getSlotTranslationLanguages(),
+      classicLanguages: getClassicTranslationLanguages(),
+      languageMode: getLanguageMode()
     });
   }
 );
@@ -137,7 +147,7 @@ router.put(
   requireAdmin,
   [
     body("name").optional().isString().trim().isLength({ min: 2, max: 80 }),
-    body("language").optional().isIn(getAllowedTranslationLanguages())
+    body("language").optional().isIn(getSlotTranslationLanguages())
   ],
   validateRequest,
   async (req, res) => {
@@ -155,7 +165,10 @@ router.put(
       slot,
       slots: listSlotLanguageAssignments(),
       activeSlot: getActiveSlot(),
-      allowedLanguages: getAllowedTranslationLanguages()
+      allowedLanguages: getAllowedTranslationLanguages(),
+      slotLanguages: getSlotTranslationLanguages(),
+      classicLanguages: getClassicTranslationLanguages(),
+      languageMode: getLanguageMode()
     });
   }
 );
@@ -171,7 +184,10 @@ router.post("/slots/:slotId/start", requireAdmin, async (req, res) => {
     slot,
     slots: listSlotLanguageAssignments(),
     activeSlot: getActiveSlot(),
-    allowedLanguages: getAllowedTranslationLanguages()
+    allowedLanguages: getAllowedTranslationLanguages(),
+    slotLanguages: getSlotTranslationLanguages(),
+    classicLanguages: getClassicTranslationLanguages(),
+    languageMode: getLanguageMode()
   });
 });
 
@@ -186,14 +202,17 @@ router.post("/slots/:slotId/stop", requireAdmin, async (req, res) => {
     slot,
     slots: listSlotLanguageAssignments(),
     activeSlot: getActiveSlot(),
-    allowedLanguages: getAllowedTranslationLanguages()
+    allowedLanguages: getAllowedTranslationLanguages(),
+    slotLanguages: getSlotTranslationLanguages(),
+    classicLanguages: getClassicTranslationLanguages(),
+    languageMode: getLanguageMode()
   });
 });
 
 router.post(
   "/slots/:slotId/language",
   requireAdmin,
-  [body("language").isIn(getAllowedTranslationLanguages())],
+  [body("language").isIn(getSlotTranslationLanguages())],
   validateRequest,
   async (req, res) => {
     const slotId = String(req.params.slotId || "").trim().toLowerCase();
@@ -208,7 +227,34 @@ router.post(
       assignment,
       slots: listSlotLanguageAssignments(),
       activeSlot: getActiveSlot(),
+      allowedLanguages: getAllowedTranslationLanguages(),
+      slotLanguages: getSlotTranslationLanguages(),
+      classicLanguages: getClassicTranslationLanguages(),
+      languageMode: getLanguageMode()
+    });
+  }
+);
+
+router.post(
+  "/language-mode",
+  requireAdmin,
+  [body("mode").isIn(["slot", "classic"])],
+  validateRequest,
+  async (req, res) => {
+    const languageMode = setLanguageMode(req.body.mode);
+    const io = getIo();
+    io?.emit("language-mode-updated", {
+      languageMode,
       allowedLanguages: getAllowedTranslationLanguages()
+    });
+
+    return res.json({
+      languageMode,
+      allowedLanguages: getAllowedTranslationLanguages(),
+      slotLanguages: getSlotTranslationLanguages(),
+      classicLanguages: getClassicTranslationLanguages(),
+      slots: listSlotLanguageAssignments(),
+      activeSlot: getActiveSlot()
     });
   }
 );

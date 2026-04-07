@@ -12,10 +12,14 @@ import TimerBar from "../components/TimerBar";
 
 const cheers = ["You are on fire", "Compiler fears you", "Edge cases fear your vibe"];
 
-const languageOptions = [
+const allLanguageOptions = [
   { label: "Go", value: "go", monaco: "go" },
   { label: "Rust", value: "rust", monaco: "rust" },
-  { label: "Kotlin", value: "kotlin", monaco: "kotlin" }
+  { label: "Kotlin", value: "kotlin", monaco: "kotlin" },
+  { label: "Java", value: "java", monaco: "java" },
+  { label: "C", value: "c", monaco: "c" },
+  { label: "C++", value: "cpp", monaco: "cpp" },
+  { label: "JavaScript", value: "javascript", monaco: "javascript" }
 ];
 
 const cheatSheets = {
@@ -123,6 +127,35 @@ const cheatSheets = {
 };
 
 const boilerplates = {
+  c: `#include <stdio.h>
+
+int main(void) {
+    
+    return 0;
+}
+`,
+  cpp: `#include <iostream>
+using namespace std;
+
+int main() {
+    
+    return 0;
+}
+`,
+  java: `import java.util.*;
+
+public class Main {
+    public static void main(String[] args) {
+        
+    }
+}
+`,
+  javascript: `function solve() {
+    
+}
+
+solve();
+`,
   go: `package main
 
 import (
@@ -175,6 +208,8 @@ export default function GamePage() {
   const [copyAttemptCount, setCopyAttemptCount] = useState(0);
   const [pasteAttemptCount, setPasteAttemptCount] = useState(0);
   const [attemptHistory, setAttemptHistory] = useState([]);
+  const [availableLanguages, setAvailableLanguages] = useState(["go", "rust", "kotlin"]);
+  const [languageMode, setLanguageMode] = useState("slot");
   const [showCheatSheet, setShowCheatSheet] = useState(false);
   const [contestState, setContestState] = useState({ mode: "live", message: "Contest is live." });
   const [fullscreenActive, setFullscreenActive] = useState(Boolean(document.fullscreenElement));
@@ -198,6 +233,8 @@ export default function GamePage() {
       setCopyAttemptCount(data.session.copyAttemptCount || 0);
       setPasteAttemptCount(data.session.pasteAttemptCount || 0);
       setAttemptHistory(data.session.attemptHistory || []);
+      setAvailableLanguages(data.session.allowedLanguages || ["go", "rust", "kotlin"]);
+      setLanguageMode(data.session.languageMode || "slot");
       setContestState(data.session.contestState || { mode: "live", message: "Contest is live." });
       if (data.session.startedAt) {
         const sec = Math.max(0, Math.floor((Date.now() - new Date(data.session.startedAt).getTime()) / 1000));
@@ -235,10 +272,16 @@ export default function GamePage() {
         setGuardMessage(nextState?.message || "Contest access has changed.");
       }
     };
+    const onLanguageModeUpdated = ({ languageMode: nextMode, allowedLanguages }) => {
+      setLanguageMode(nextMode || "slot");
+      setAvailableLanguages(allowedLanguages || []);
+    };
 
     socket.on("contest-state-updated", onContestStateUpdated);
+    socket.on("language-mode-updated", onLanguageModeUpdated);
     return () => {
       socket.off("contest-state-updated", onContestStateUpdated);
+      socket.off("language-mode-updated", onLanguageModeUpdated);
     };
   }, []);
 
@@ -303,6 +346,19 @@ export default function GamePage() {
       setCode(preferredBoilerplate);
     }
   }, [selectedLanguage, session, code]);
+
+  useEffect(() => {
+    if (!availableLanguages.length) {
+      return;
+    }
+
+    if (!availableLanguages.includes(selectedLanguage)) {
+      setSelectedLanguage(availableLanguages[0]);
+      if (!code.trim()) {
+        setCode(boilerplates[availableLanguages[0]] || "");
+      }
+    }
+  }, [availableLanguages, selectedLanguage, code]);
 
   useEffect(() => {
     if (!session) {
@@ -524,6 +580,7 @@ export default function GamePage() {
     return <main className="grid min-h-screen place-items-center bg-black text-sky-100">Loading mission...</main>;
   }
 
+  const languageOptions = allLanguageOptions.filter((option) => availableLanguages.includes(option.value));
   const monacoLanguage = languageOptions.find((x) => x.value === selectedLanguage)?.monaco || "javascript";
   const editingLocked = contestState.mode !== "live";
   const sheet = cheatSheets[selectedLanguage] || { title: "Cheat Sheet", blocks: [] };
@@ -565,7 +622,11 @@ export default function GamePage() {
                   <p className="text-sky-100">What to do</p>
                   <p className="mt-2">Translate the Python source exactly into {languageOptions.find((option) => option.value === selectedLanguage)?.label || "your selected language"}.</p>
                   <p className="mt-2">Keep input and output behavior exactly the same, including edge cases.</p>
-                  <p className="mt-2">Slot: {session.slotName || String(session.slotId || "").toUpperCase()} (language locked by admin).</p>
+                  <p className="mt-2">
+                    {languageMode === "slot"
+                      ? `Slot: ${session.slotName || String(session.slotId || "").toUpperCase()} (language locked by admin).`
+                      : "Classic mode is active. You can choose your language."}
+                  </p>
                 </div>
                 <div className="rounded-2xl border border-sky-300/15 bg-black/35 p-4">
                   <p className="text-sky-100">Submission Checklist</p>
@@ -623,9 +684,23 @@ export default function GamePage() {
             <div className="mb-3 flex items-center justify-between gap-3">
               <div className="text-xs uppercase tracking-[0.2em] text-sky-400">Your Translation</div>
               <div className="flex items-center gap-2">
-                <span className="rounded-lg border border-sky-300/25 bg-black/55 px-3 py-1 text-sm text-sky-50">
-                  {languageOptions.find((option) => option.value === selectedLanguage)?.label || selectedLanguage}
-                </span>
+                {languageMode === "slot" ? (
+                  <span className="rounded-lg border border-sky-300/25 bg-black/55 px-3 py-1 text-sm text-sky-50">
+                    {languageOptions.find((option) => option.value === selectedLanguage)?.label || selectedLanguage}
+                  </span>
+                ) : (
+                  <select
+                    value={selectedLanguage}
+                    onChange={(event) => setSelectedLanguage(event.target.value)}
+                    className="rounded-lg border border-sky-300/25 bg-black/55 px-3 py-1 text-sm text-sky-50"
+                  >
+                    {languageOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 <NeonButton className="px-3 py-1.5 text-xs" onClick={() => setShowCheatSheet(true)}>
                   Cheat Sheet
                 </NeonButton>

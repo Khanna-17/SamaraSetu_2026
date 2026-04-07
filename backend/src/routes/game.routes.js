@@ -10,10 +10,13 @@ import { getIo } from "../config/socket.js";
 import { pickFairQuestion } from "../services/questionSelector.js";
 import {
   createSession,
+  getAllTranslationLanguages,
+  getAllowedTranslationLanguages,
   getAttemptHistoryByRollNumber,
   getAttemptSummaryByRollNumber,
   getAttemptedQuestionIdsByRollNumber,
   getContestState,
+  getLanguageMode,
   getQuestionById,
   getSessionById,
   updateSession
@@ -21,12 +24,20 @@ import {
 
 const router = Router();
 
-const allowedLanguages = ["go", "rust", "kotlin"];
+const allLanguages = getAllTranslationLanguages();
 
 function sanitizeCode(rawCode) {
   const maxLength = Number(process.env.MAX_CODE_LENGTH || 15000);
   const code = String(rawCode || "").slice(0, maxLength);
   return code.replace(/\u0000/g, "");
+}
+
+function isAllowedLanguage(language) {
+  return getAllowedTranslationLanguages().includes(String(language || "").trim().toLowerCase());
+}
+
+function isLanguageLockedForSession(session, selectedLanguage) {
+  return getLanguageMode() === "slot" && selectedLanguage !== session.selectedLanguage;
 }
 
 function basicCompileCheck(code, language) {
@@ -69,6 +80,17 @@ function basicCompileCheck(code, language) {
     result.ok = false;
     result.messages.push("Kotlin program should include 'fun main'.");
   }
+  if (language === "java" && !normalized.includes("public static void main")) {
+    result.ok = false;
+    result.messages.push("Java program should include 'public static void main'.");
+  }
+  if ((language === "c" || language === "cpp") && !normalized.includes("main(")) {
+    result.ok = false;
+    result.messages.push("C/C++ program should include 'main'.");
+  }
+  if (language === "javascript" && !normalized.includes("console.log") && !normalized.includes("return")) {
+    result.messages.push("JavaScript output signal not found. Add console.log or return as needed.");
+  }
 
   if (result.ok) {
     result.messages.push("Basic compile checks passed.");
@@ -88,6 +110,8 @@ router.get("/session", requireUser, async (req, res) => {
   const attemptSummary = getAttemptSummaryByRollNumber(session.rollNumber);
   const attemptHistory = getAttemptHistoryByRollNumber(session.rollNumber);
   const contestState = getContestState();
+  const allowedLanguages = getAllowedTranslationLanguages();
+  const languageMode = getLanguageMode();
 
   return res.json({
     session: {
@@ -97,6 +121,8 @@ router.get("/session", requireUser, async (req, res) => {
       slotId: session.slotId,
       slotName: session.slotName,
       selectedLanguage: session.selectedLanguage,
+      allowedLanguages,
+      languageMode,
       code: session.code,
       startedAt: session.startedAt,
       timeTaken: session.timeTaken,
@@ -134,7 +160,7 @@ router.post(
   "/autosave",
   requireUser,
   [
-    body("selectedLanguage").optional().isIn(allowedLanguages),
+    body("selectedLanguage").optional().isIn(allLanguages),
     body("code").optional().isString(),
     body("timeTaken").optional().isFloat({ min: 0, max: 7200 })
   ],
@@ -151,10 +177,7 @@ router.post(
       payload.code = sanitizeCode(req.body.code);
     }
 
-    if (
-      allowedLanguages.includes(req.body.selectedLanguage) &&
-      req.body.selectedLanguage === session.selectedLanguage
-    ) {
+    if (isAllowedLanguage(req.body.selectedLanguage) && !isLanguageLockedForSession(session, req.body.selectedLanguage)) {
       payload.selectedLanguage = req.body.selectedLanguage;
     }
 
@@ -172,7 +195,7 @@ router.post(
   "/compile",
   requireUser,
   [
-    body("selectedLanguage").isIn(allowedLanguages),
+    body("selectedLanguage").isIn(allLanguages),
     body("code").isString().isLength({ min: 1, max: Number(process.env.MAX_CODE_LENGTH || 15000) })
   ],
   validateRequest,
@@ -183,7 +206,10 @@ router.post(
     }
 
     const selectedLanguage = req.body.selectedLanguage;
-    if (selectedLanguage !== session.selectedLanguage) {
+    if (!isAllowedLanguage(selectedLanguage)) {
+      return res.status(400).json({ message: "Selected language is not enabled right now." });
+    }
+    if (isLanguageLockedForSession(session, selectedLanguage)) {
       return res.status(400).json({
         message: `Language is locked for your slot. Use ${session.selectedLanguage}.`
       });
@@ -236,7 +262,7 @@ router.post(
   "/run",
   requireUser,
   [
-    body("selectedLanguage").isIn(allowedLanguages),
+    body("selectedLanguage").isIn(allLanguages),
     body("code").isString().isLength({ min: 1, max: Number(process.env.MAX_CODE_LENGTH || 15000) }),
     body("stdin").optional().isString().isLength({ max: 5000 })
   ],
@@ -248,7 +274,10 @@ router.post(
     }
 
     const selectedLanguage = req.body.selectedLanguage;
-    if (selectedLanguage !== session.selectedLanguage) {
+    if (!isAllowedLanguage(selectedLanguage)) {
+      return res.status(400).json({ message: "Selected language is not enabled right now." });
+    }
+    if (isLanguageLockedForSession(session, selectedLanguage)) {
       return res.status(400).json({
         message: `Language is locked for your slot. Use ${session.selectedLanguage}.`
       });
@@ -315,7 +344,7 @@ router.post(
   "/submit",
   requireUser,
   [
-    body("selectedLanguage").isIn(allowedLanguages),
+    body("selectedLanguage").isIn(allLanguages),
     body("code").isString().isLength({ min: 1, max: Number(process.env.MAX_CODE_LENGTH || 15000) }),
     body("timeTaken").isFloat({ min: 0, max: 7200 })
   ],
@@ -348,7 +377,11 @@ router.post(
       return res.status(400).json({ message: "Code cannot be empty." });
     }
 
-    if (selectedLanguage !== session.selectedLanguage) {
+    if (!isAllowedLanguage(selectedLanguage)) {
+      return res.status(400).json({ message: "Selected language is not enabled right now." });
+    }
+
+    if (isLanguageLockedForSession(session, selectedLanguage)) {
       return res.status(400).json({
         message: `Language is locked for your slot. Use ${session.selectedLanguage}.`
       });
@@ -576,13 +609,18 @@ router.post("/next-question", requireUser, async (req, res) => {
   }
 
   const question = await pickFairQuestion({ excludeQuestionIds: attemptedQuestionIds, rollNumber: session.rollNumber });
+  const allowedLanguages = getAllowedTranslationLanguages();
+  const languageMode = getLanguageMode();
   const nextSession = createSession({
     name: session.name,
     rollNumber: session.rollNumber,
     resumeKey: session.resumeKey,
     assignedQuestionId: question._id,
     code: "",
-    selectedLanguage: session.selectedLanguage,
+    selectedLanguage:
+      languageMode === "slot"
+        ? session.selectedLanguage
+        : (allowedLanguages.includes(session.selectedLanguage) ? session.selectedLanguage : allowedLanguages[0]),
     slotId: session.slotId,
     slotName: session.slotName
   });
@@ -602,6 +640,8 @@ router.post("/next-question", requireUser, async (req, res) => {
       slotId: nextSession.slotId,
       slotName: nextSession.slotName,
       selectedLanguage: nextSession.selectedLanguage,
+      allowedLanguages,
+      languageMode,
       code: nextSession.code,
       startedAt: nextSession.startedAt,
       status: nextSession.status,

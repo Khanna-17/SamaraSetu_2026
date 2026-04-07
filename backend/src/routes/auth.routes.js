@@ -7,11 +7,13 @@ import { pickFairQuestion } from "../services/questionSelector.js";
 import {
   createSession,
   getActiveSlot,
+  getAllowedTranslationLanguages,
   getAttemptHistoryByRollNumber,
   getAttemptSummaryByRollNumber,
   getContestState,
   getAttemptedQuestionIdsByRollNumber,
   getInProgressSessionByRollNumber,
+  getLanguageMode,
   getQuestionById
 } from "../store/memoryStore.js";
 
@@ -29,8 +31,10 @@ router.post(
     const { name, rollNumber, resumeKey } = req.body;
     const activeSlot = getActiveSlot();
     const contestState = getContestState();
+    const languageMode = getLanguageMode();
+    const allowedLanguages = getAllowedTranslationLanguages();
 
-    if (!activeSlot) {
+    if (languageMode === "slot" && !activeSlot) {
       return res.status(423).json({
         message: "Slot is not started yet."
       });
@@ -67,9 +71,9 @@ router.post(
         resumeKey: crypto.randomBytes(24).toString("hex"),
         assignedQuestionId: question._id,
         code: "",
-        selectedLanguage: activeSlot.language,
-        slotId: activeSlot.slotId,
-        slotName: activeSlot.name
+        selectedLanguage: languageMode === "slot" ? activeSlot.language : allowedLanguages[0],
+        slotId: languageMode === "slot" ? activeSlot.slotId : "",
+        slotName: languageMode === "slot" ? activeSlot.name : ""
       });
       session.assignedQuestion = question;
     } else {
@@ -95,6 +99,8 @@ router.post(
         slotId: session.slotId,
         slotName: session.slotName,
         selectedLanguage: session.selectedLanguage,
+        allowedLanguages,
+        languageMode,
         code: session.code,
         startedAt: session.startedAt,
         status: session.status,

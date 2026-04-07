@@ -13,7 +13,11 @@ function createSessionId() {
   return crypto.randomUUID();
 }
 
-const allowedTranslationLanguages = ["go", "rust", "kotlin"];
+const SLOT_TRANSLATION_LANGUAGES = ["go", "rust", "kotlin"];
+const CLASSIC_TRANSLATION_LANGUAGES = ["java", "c", "cpp", "javascript"];
+const ALL_TRANSLATION_LANGUAGES = Array.from(
+  new Set([...SLOT_TRANSLATION_LANGUAGES, ...CLASSIC_TRANSLATION_LANGUAGES])
+);
 
 function createSlotId() {
   return `slot-${crypto.randomBytes(4).toString("hex")}`;
@@ -27,9 +31,9 @@ function sanitizeSlotName(slotName = "") {
   return String(slotName || "").trim();
 }
 
-function sanitizeLanguage(language = "") {
+function sanitizeSlotLanguage(language = "") {
   const normalized = String(language || "").trim().toLowerCase();
-  return allowedTranslationLanguages.includes(normalized) ? normalized : null;
+  return SLOT_TRANSLATION_LANGUAGES.includes(normalized) ? normalized : null;
 }
 
 function inferQuestionCategory({ title = "", pythonCode = "", hint = "" }) {
@@ -82,7 +86,8 @@ const state = {
     mode: "live",
     message: "Contest is live.",
     updatedAt: new Date().toISOString()
-  }
+  },
+  languageMode: "slot"
 };
 
 function getLatestSession(sessions = []) {
@@ -209,7 +214,35 @@ export function pickFairQuestion({ excludeQuestionIds = [], rollNumber = "" } = 
 }
 
 export function getAllowedTranslationLanguages() {
-  return [...allowedTranslationLanguages];
+  return state.languageMode === "classic"
+    ? [...CLASSIC_TRANSLATION_LANGUAGES]
+    : [...SLOT_TRANSLATION_LANGUAGES];
+}
+
+export function getAllTranslationLanguages() {
+  return [...ALL_TRANSLATION_LANGUAGES];
+}
+
+export function getSlotTranslationLanguages() {
+  return [...SLOT_TRANSLATION_LANGUAGES];
+}
+
+export function getClassicTranslationLanguages() {
+  return [...CLASSIC_TRANSLATION_LANGUAGES];
+}
+
+export function getLanguageMode() {
+  return state.languageMode;
+}
+
+export function setLanguageMode(mode = "slot") {
+  const nextMode = String(mode || "").trim().toLowerCase();
+  if (!["slot", "classic"].includes(nextMode)) {
+    return null;
+  }
+
+  state.languageMode = nextMode;
+  return state.languageMode;
 }
 
 export function listSlotLanguageAssignments() {
@@ -234,7 +267,7 @@ export function getActiveSlot() {
 
 export function createSlot({ name, language }) {
   const slotName = sanitizeSlotName(name);
-  const slotLanguage = sanitizeLanguage(language);
+  const slotLanguage = sanitizeSlotLanguage(language);
 
   if (!slotName || !slotLanguage) {
     return null;
@@ -265,7 +298,7 @@ export function updateSlot(slotId, payload = {}) {
   }
 
   const nextName = payload.name !== undefined ? sanitizeSlotName(payload.name) : target.name;
-  const nextLanguage = payload.language !== undefined ? sanitizeLanguage(payload.language) : target.language;
+  const nextLanguage = payload.language !== undefined ? sanitizeSlotLanguage(payload.language) : target.language;
 
   if (!nextName || !nextLanguage) {
     return null;
@@ -305,7 +338,7 @@ export function stopSlot(slotId) {
 
 export function getAssignedLanguageForSlot(slotId) {
   const slot = getSlotById(slotId);
-  return sanitizeLanguage(slot?.language) || null;
+  return sanitizeSlotLanguage(slot?.language) || null;
 }
 
 export function setSlotLanguageAssignment(slotId, language) {

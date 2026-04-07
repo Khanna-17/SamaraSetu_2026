@@ -17,7 +17,10 @@ export default function AdminDashboardPage() {
   const [contestState, setContestState] = useState({ mode: "live", message: "Contest is live." });
   const [slots, setSlots] = useState([]);
   const [activeSlot, setActiveSlot] = useState(null);
+  const [languageMode, setLanguageMode] = useState("slot");
   const [allowedLanguages, setAllowedLanguages] = useState(["go", "rust", "kotlin"]);
+  const [slotLanguages, setSlotLanguages] = useState(["go", "rust", "kotlin"]);
+  const [classicLanguages, setClassicLanguages] = useState(["java", "c", "cpp", "javascript"]);
   const [newSlotName, setNewSlotName] = useState("");
   const [newSlotLanguage, setNewSlotLanguage] = useState("go");
   const [slotDraftNames, setSlotDraftNames] = useState({});
@@ -53,7 +56,10 @@ export default function AdminDashboardPage() {
     setContestState(cRes.data.contestState || { mode: "live", message: "Contest is live." });
     setSlots(sRes.data.slots || []);
     setActiveSlot(sRes.data.activeSlot || null);
+    setLanguageMode(sRes.data.languageMode || "slot");
     setAllowedLanguages(sRes.data.allowedLanguages || ["go", "rust", "kotlin"]);
+    setSlotLanguages(sRes.data.slotLanguages || ["go", "rust", "kotlin"]);
+    setClassicLanguages(sRes.data.classicLanguages || ["java", "c", "cpp", "javascript"]);
   }
 
   async function loadDetail(id) {
@@ -80,10 +86,15 @@ export default function AdminDashboardPage() {
 
     socket.on("participant-updated", onParticipantUpdated);
     socket.on("contest-state-updated", onContestStateUpdated);
+    socket.on("language-mode-updated", ({ languageMode: nextMode, allowedLanguages: nextAllowed }) => {
+      setLanguageMode(nextMode || "slot");
+      setAllowedLanguages(nextAllowed || []);
+    });
 
     return () => {
       socket.off("participant-updated", onParticipantUpdated);
       socket.off("contest-state-updated", onContestStateUpdated);
+      socket.off("language-mode-updated");
     };
   }, []);
 
@@ -241,6 +252,22 @@ export default function AdminDashboardPage() {
     }
   }
 
+  async function toggleLanguageMode() {
+    const nextMode = languageMode === "slot" ? "classic" : "slot";
+    setSlotError("");
+    try {
+      const { data } = await api.post("/admin/language-mode", { mode: nextMode }, AdminApiHeader());
+      setLanguageMode(data.languageMode || nextMode);
+      setAllowedLanguages(data.allowedLanguages || []);
+      setSlotLanguages(data.slotLanguages || []);
+      setClassicLanguages(data.classicLanguages || []);
+      setSlots(data.slots || []);
+      setActiveSlot(data.activeSlot || null);
+    } catch (err) {
+      setSlotError(err.response?.data?.message || "Unable to change language mode.");
+    }
+  }
+
   const completionText = useMemo(() => `${analytics.completionRate || 0}%`, [analytics.completionRate]);
 
   return (
@@ -274,7 +301,21 @@ export default function AdminDashboardPage() {
                     <h2 className="font-display text-2xl text-sky-100">Contest Controls</h2>
                     <p className="text-sm text-slate-300">{contestState.message}</p>
                   </div>
-                  <p className="rounded-xl border border-sky-300/20 bg-black/35 px-3 py-2 text-sm text-sky-100">Mode: {contestState.mode}</p>
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Language Set</p>
+                      <p className="text-sm text-sky-100">{languageMode === "slot" ? "Slots: GO / RUST / KOTLIN" : "Classic: JAVA / C / CPP / JAVASCRIPT"}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={toggleLanguageMode}
+                      title="Toggle language set"
+                      className={`h-8 w-8 rounded-md border transition ${languageMode === "slot" ? "border-sky-300/45 bg-sky-300/18" : "border-slate-500/70 bg-slate-800/80"}`}
+                    >
+                      <span className="sr-only">Toggle language mode</span>
+                    </button>
+                    <p className="rounded-xl border border-sky-300/20 bg-black/35 px-3 py-2 text-sm text-sky-100">Mode: {contestState.mode}</p>
+                  </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <NeonButton onClick={() => changeContestState("live")}>Go Live</NeonButton>
@@ -283,48 +324,68 @@ export default function AdminDashboardPage() {
                 </div>
 
                 <div className="rounded-xl border border-sky-300/15 bg-black/35 p-3 text-sm text-slate-300">
-                  <p>
-                    Active slot: {activeSlot ? `${activeSlot.name} (${String(activeSlot.language || "").toUpperCase()})` : "None"}
+                  <p>Enabled languages: {allowedLanguages.map((language) => language.toUpperCase()).join(" / ")}</p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    {languageMode === "slot"
+                      ? "Slot mode is active. Users get the language assigned by the started slot."
+                      : "Classic mode is active. Users can choose their own language in the game page."}
                   </p>
-                  <p className="mt-1 text-xs text-slate-400">Users can join only when a slot is started.</p>
                 </div>
 
-                <div className="grid gap-2 md:grid-cols-[1.3fr_1fr_auto]">
-                  <input value={newSlotName} onChange={(event) => setNewSlotName(event.target.value)} placeholder="New slot name" className="rounded-lg border border-sky-300/25 bg-black/55 px-2 py-1 text-sm text-sky-50" />
-                  <select value={newSlotLanguage} onChange={(event) => setNewSlotLanguage(event.target.value)} className="rounded-lg border border-sky-300/25 bg-black/55 px-2 py-1 text-sm text-sky-50">
-                    {allowedLanguages.map((language) => (
-                      <option key={language} value={language}>{language.toUpperCase()}</option>
-                    ))}
-                  </select>
-                  <NeonButton onClick={createSlot}>Create Slot</NeonButton>
-                </div>
+                {languageMode === "slot" ? (
+                  <>
+                    <div className="rounded-xl border border-sky-300/15 bg-black/35 p-3 text-sm text-slate-300">
+                      <p>
+                        Active slot: {activeSlot ? `${activeSlot.name} (${String(activeSlot.language || "").toUpperCase()})` : "None"}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-400">Users can join only when a slot is started.</p>
+                    </div>
 
-                {slotError ? <p className="text-sm text-rose-300">{slotError}</p> : null}
-
-                <div className="grid gap-2 md:grid-cols-2">
-                  {slots.map((slot) => (
-                    <div key={slot.slotId} className="rounded-xl border border-sky-300/15 bg-black/35 p-3 text-sm text-slate-300">
-                      <p className="text-sky-100">{slot.name || slot.slotId}</p>
-                      <p className="text-xs text-slate-400">ID: {slot.slotId}</p>
-                      <input
-                        value={slotDraftNames[slot.slotId] ?? slot.name ?? ""}
-                        onChange={(event) => setSlotDraftNames((prev) => ({ ...prev, [slot.slotId]: event.target.value }))}
-                        className="mt-2 w-full rounded-lg border border-sky-300/25 bg-black/55 px-2 py-1 text-sm text-sky-50"
-                        placeholder="Slot name"
-                      />
-                      <select value={slot.language} onChange={(event) => updateSlot(slot.slotId, { language: event.target.value })} className="mt-2 w-full rounded-lg border border-sky-300/25 bg-black/55 px-2 py-1 text-sm text-sky-50">
-                        {allowedLanguages.map((language) => (
+                    <div className="grid gap-2 md:grid-cols-[1.3fr_1fr_auto]">
+                      <input value={newSlotName} onChange={(event) => setNewSlotName(event.target.value)} placeholder="New slot name" className="rounded-lg border border-sky-300/25 bg-black/55 px-2 py-1 text-sm text-sky-50" />
+                      <select value={newSlotLanguage} onChange={(event) => setNewSlotLanguage(event.target.value)} className="rounded-lg border border-sky-300/25 bg-black/55 px-2 py-1 text-sm text-sky-50">
+                        {slotLanguages.map((language) => (
                           <option key={language} value={language}>{language.toUpperCase()}</option>
                         ))}
                       </select>
-                      <div className="mt-2 flex gap-2">
-                        <NeonButton className="px-3 py-1 text-xs" onClick={() => updateSlot(slot.slotId, { name: (slotDraftNames[slot.slotId] ?? slot.name ?? "").trim() })}>Save</NeonButton>
-                        <NeonButton className="px-3 py-1 text-xs" onClick={() => startSelectedSlot(slot.slotId)}>Start</NeonButton>
-                        <NeonButton className="border-slate-700/70 bg-slate-950/55 px-3 py-1 text-xs text-sky-200 hover:bg-slate-900/70" onClick={() => stopSelectedSlot(slot.slotId)}>Stop</NeonButton>
-                      </div>
+                      <NeonButton onClick={createSlot}>Create Slot</NeonButton>
                     </div>
-                  ))}
-                </div>
+
+                    {slotError ? <p className="text-sm text-rose-300">{slotError}</p> : null}
+
+                    <div className="grid gap-2 md:grid-cols-2">
+                      {slots.map((slot) => (
+                        <div key={slot.slotId} className="rounded-xl border border-sky-300/15 bg-black/35 p-3 text-sm text-slate-300">
+                          <p className="text-sky-100">{slot.name || slot.slotId}</p>
+                          <p className="text-xs text-slate-400">ID: {slot.slotId}</p>
+                          <input
+                            value={slotDraftNames[slot.slotId] ?? slot.name ?? ""}
+                            onChange={(event) => setSlotDraftNames((prev) => ({ ...prev, [slot.slotId]: event.target.value }))}
+                            className="mt-2 w-full rounded-lg border border-sky-300/25 bg-black/55 px-2 py-1 text-sm text-sky-50"
+                            placeholder="Slot name"
+                          />
+                          <select value={slot.language} onChange={(event) => updateSlot(slot.slotId, { language: event.target.value })} className="mt-2 w-full rounded-lg border border-sky-300/25 bg-black/55 px-2 py-1 text-sm text-sky-50">
+                            {slotLanguages.map((language) => (
+                              <option key={language} value={language}>{language.toUpperCase()}</option>
+                            ))}
+                          </select>
+                          <div className="mt-2 flex gap-2">
+                            <NeonButton className="px-3 py-1 text-xs" onClick={() => updateSlot(slot.slotId, { name: (slotDraftNames[slot.slotId] ?? slot.name ?? "").trim() })}>Save</NeonButton>
+                            <NeonButton className="px-3 py-1 text-xs" onClick={() => startSelectedSlot(slot.slotId)}>Start</NeonButton>
+                            <NeonButton className="border-slate-700/70 bg-slate-950/55 px-3 py-1 text-xs text-sky-200 hover:bg-slate-900/70" onClick={() => stopSelectedSlot(slot.slotId)}>Stop</NeonButton>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="rounded-xl border border-sky-300/15 bg-black/35 p-3 text-sm text-slate-300">
+                    <p className="text-sky-100">Classic language chooser enabled</p>
+                    <p className="mt-2">Available to users: {classicLanguages.map((language) => language.toUpperCase()).join(" / ")}</p>
+                    <p className="mt-1 text-xs text-slate-400">Slots are ignored in this mode. Users pick their own language on the game screen.</p>
+                    {slotError ? <p className="mt-2 text-sm text-rose-300">{slotError}</p> : null}
+                  </div>
+                )}
               </GlassCard>
 
               <GlassCard className="min-h-0 overflow-y-auto">

@@ -8,7 +8,7 @@ import authRoutes from "./routes/auth.routes.js";
 import gameRoutes from "./routes/game.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
 import leaderboardRoutes from "./routes/leaderboard.routes.js";
-import { getActiveSlot, getContestState, listSlotLanguageAssignments } from "./store/memoryStore.js";
+import { getActiveSlot, getAllowedTranslationLanguages, getContestState, getLanguageMode, listSlotLanguageAssignments } from "./store/memoryStore.js";
 
 export function createApp() {
   const app = express();
@@ -45,7 +45,9 @@ export function createApp() {
     res.json({
       contestState: getContestState(),
       slots: listSlotLanguageAssignments(),
-      activeSlot: getActiveSlot()
+      activeSlot: getActiveSlot(),
+      languageMode: getLanguageMode(),
+      allowedLanguages: getAllowedTranslationLanguages()
     });
   });
 
