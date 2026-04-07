@@ -7,15 +7,24 @@ import { validateRequest } from "../middleware/validate.js";
 import { requireAdmin } from "../middleware/auth.js";
 import { getIo } from "../config/socket.js";
 import {
+  createSlot,
   createQuestion,
   deleteQuestion,
+  getActiveSlot,
   getAnalytics,
   getContestState,
+  getAllowedTranslationLanguages,
   getExportRows,
+  getExportRowsBySlot,
   getParticipantDetail,
+  listSlotLanguageAssignments,
   listParticipants,
   listQuestions,
   resetSessionData,
+  startSlot,
+  stopSlot,
+  setSlotLanguageAssignment,
+  updateSlot,
   updateContestState,
   updateQuestion,
   getQuestionById
@@ -87,6 +96,122 @@ router.get("/analytics", requireAdmin, async (_req, res) => {
 router.get("/contest-state", requireAdmin, async (_req, res) => {
   res.json({ contestState: getContestState() });
 });
+
+router.get("/slots", requireAdmin, async (_req, res) => {
+  res.json({
+    slots: listSlotLanguageAssignments(),
+    activeSlot: getActiveSlot(),
+    allowedLanguages: getAllowedTranslationLanguages()
+  });
+});
+
+router.post(
+  "/slots",
+  requireAdmin,
+  [
+    body("name").isString().trim().isLength({ min: 2, max: 80 }),
+    body("language").isIn(getAllowedTranslationLanguages())
+  ],
+  validateRequest,
+  async (req, res) => {
+    const slot = createSlot({
+      name: req.body.name,
+      language: req.body.language
+    });
+
+    if (!slot) {
+      return res.status(400).json({ message: "Invalid slot payload." });
+    }
+
+    return res.status(201).json({
+      slot,
+      slots: listSlotLanguageAssignments(),
+      activeSlot: getActiveSlot(),
+      allowedLanguages: getAllowedTranslationLanguages()
+    });
+  }
+);
+
+router.put(
+  "/slots/:slotId",
+  requireAdmin,
+  [
+    body("name").optional().isString().trim().isLength({ min: 2, max: 80 }),
+    body("language").optional().isIn(getAllowedTranslationLanguages())
+  ],
+  validateRequest,
+  async (req, res) => {
+    const slotId = String(req.params.slotId || "").trim().toLowerCase();
+    const slot = updateSlot(slotId, {
+      name: req.body.name,
+      language: req.body.language
+    });
+
+    if (!slot) {
+      return res.status(404).json({ message: "Slot not found." });
+    }
+
+    return res.json({
+      slot,
+      slots: listSlotLanguageAssignments(),
+      activeSlot: getActiveSlot(),
+      allowedLanguages: getAllowedTranslationLanguages()
+    });
+  }
+);
+
+router.post("/slots/:slotId/start", requireAdmin, async (req, res) => {
+  const slotId = String(req.params.slotId || "").trim().toLowerCase();
+  const slot = startSlot(slotId);
+  if (!slot) {
+    return res.status(404).json({ message: "Slot not found." });
+  }
+
+  return res.json({
+    slot,
+    slots: listSlotLanguageAssignments(),
+    activeSlot: getActiveSlot(),
+    allowedLanguages: getAllowedTranslationLanguages()
+  });
+});
+
+router.post("/slots/:slotId/stop", requireAdmin, async (req, res) => {
+  const slotId = String(req.params.slotId || "").trim().toLowerCase();
+  const slot = stopSlot(slotId);
+  if (!slot) {
+    return res.status(404).json({ message: "Slot not found." });
+  }
+
+  return res.json({
+    slot,
+    slots: listSlotLanguageAssignments(),
+    activeSlot: getActiveSlot(),
+    allowedLanguages: getAllowedTranslationLanguages()
+  });
+});
+
+router.post(
+  "/slots/:slotId/language",
+  requireAdmin,
+  [body("language").isIn(getAllowedTranslationLanguages())],
+  validateRequest,
+  async (req, res) => {
+    const slotId = String(req.params.slotId || "").trim().toLowerCase();
+    const language = String(req.body.language || "").trim().toLowerCase();
+    const assignment = setSlotLanguageAssignment(slotId, language);
+
+    if (!assignment) {
+      return res.status(404).json({ message: "Slot not found." });
+    }
+
+    return res.json({
+      assignment,
+      slots: listSlotLanguageAssignments(),
+      activeSlot: getActiveSlot(),
+      allowedLanguages: getAllowedTranslationLanguages()
+    });
+  }
+);
 
 router.get("/participant/:id", requireAdmin, async (req, res) => {
   const participant = getParticipantDetail(req.params.id);
@@ -177,12 +302,14 @@ router.post(
 );
 
 router.get("/export", requireAdmin, async (_req, res) => {
-  const rows = getExportRows();
+  const slotId = String(_req.query.slot || "").trim().toLowerCase();
+  const rows = slotId ? getExportRowsBySlot(slotId) : getExportRows();
 
   const csv = stringify(
     rows.map((x) => ({
       name: x.name,
       rollNumber: x.rollNumber,
+      slotId: x.slotId || "",
       selectedLanguage: x.selectedLanguage,
       finalScore: x.scoreBreakdown?.finalScore || 0,
       timeTaken: x.timeTaken || 0,
@@ -192,7 +319,10 @@ router.get("/export", requireAdmin, async (_req, res) => {
   );
 
   res.setHeader("Content-Type", "text/csv");
-  res.setHeader("Content-Disposition", "attachment; filename=arena-results.csv");
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename=${slotId ? `arena-results-${slotId}.csv` : "arena-results.csv"}`
+  );
   res.send(csv);
 });
 

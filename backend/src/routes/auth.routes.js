@@ -6,6 +6,7 @@ import { validateRequest } from "../middleware/validate.js";
 import { pickFairQuestion } from "../services/questionSelector.js";
 import {
   createSession,
+  getActiveSlot,
   getAttemptHistoryByRollNumber,
   getAttemptSummaryByRollNumber,
   getContestState,
@@ -26,7 +27,14 @@ router.post(
   validateRequest,
   async (req, res) => {
     const { name, rollNumber, resumeKey } = req.body;
+    const activeSlot = getActiveSlot();
     const contestState = getContestState();
+
+    if (!activeSlot) {
+      return res.status(423).json({
+        message: "Slot is not started yet."
+      });
+    }
 
     if (contestState.mode !== "live") {
       return res.status(423).json({
@@ -59,7 +67,9 @@ router.post(
         resumeKey: crypto.randomBytes(24).toString("hex"),
         assignedQuestionId: question._id,
         code: "",
-        selectedLanguage: "javascript"
+        selectedLanguage: activeSlot.language,
+        slotId: activeSlot.slotId,
+        slotName: activeSlot.name
       });
       session.assignedQuestion = question;
     } else {
@@ -82,6 +92,8 @@ router.post(
         id: session._id,
         name: session.name,
         rollNumber: session.rollNumber,
+        slotId: session.slotId,
+        slotName: session.slotName,
         selectedLanguage: session.selectedLanguage,
         code: session.code,
         startedAt: session.startedAt,

@@ -168,12 +168,19 @@ function localEvaluate(sourcePython, userCode, targetLanguage) {
     normalizedUser.includes("cin") ||
     normalizedUser.includes("scanner") ||
     normalizedUser.includes("readline") ||
+    normalizedUser.includes("bufio.newscanner") ||
+    normalizedUser.includes("read_line") ||
+    normalizedUser.includes("stdin") ||
+    normalizedUser.includes("readline") ||
     normalizedUser.includes("fs.readfilesync") ||
     normalizedUser.includes("prompt(");
   const userHasOutputSignal =
     normalizedUser.includes("printf") ||
     normalizedUser.includes("cout") ||
     normalizedUser.includes("system.out") ||
+    normalizedUser.includes("fmt.println") ||
+    normalizedUser.includes("println!") ||
+    normalizedUser.includes("println(") ||
     normalizedUser.includes("console.log");
 
   const sourceComplexity = inferComplexityLevel(sourcePython);
@@ -185,9 +192,9 @@ function localEvaluate(sourcePython, userCode, targetLanguage) {
   const spaceGap = Math.abs(sourceSpace - userSpace);
 
   const languageSignalBonus = (() => {
-    if (targetLanguage === "javascript" && normalizedUser.includes("console.log")) return 2;
-    if (targetLanguage === "java" && normalizedUser.includes("system.out")) return 2;
-    if ((targetLanguage === "c" || targetLanguage === "cpp") && (normalizedUser.includes("printf") || normalizedUser.includes("cout"))) return 2;
+    if (targetLanguage === "go" && (normalizedUser.includes("fmt.println") || normalizedUser.includes("fmt.print"))) return 2;
+    if (targetLanguage === "rust" && normalizedUser.includes("println!")) return 2;
+    if (targetLanguage === "kotlin" && normalizedUser.includes("println(")) return 2;
     return 0;
   })();
 

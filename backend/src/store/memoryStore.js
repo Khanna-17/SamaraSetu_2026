@@ -13,6 +13,25 @@ function createSessionId() {
   return crypto.randomUUID();
 }
 
+const allowedTranslationLanguages = ["go", "rust", "kotlin"];
+
+function createSlotId() {
+  return `slot-${crypto.randomBytes(4).toString("hex")}`;
+}
+
+function sanitizeSlotId(slotId = "") {
+  return String(slotId || "").trim().toLowerCase();
+}
+
+function sanitizeSlotName(slotName = "") {
+  return String(slotName || "").trim();
+}
+
+function sanitizeLanguage(language = "") {
+  const normalized = String(language || "").trim().toLowerCase();
+  return allowedTranslationLanguages.includes(normalized) ? normalized : null;
+}
+
 function inferQuestionCategory({ title = "", pythonCode = "", hint = "" }) {
   const text = `${title} ${hint} ${pythonCode}`.toLowerCase();
 
@@ -58,6 +77,7 @@ function createQuestions() {
 const state = {
   questions: createQuestions(),
   sessions: [],
+  slots: [],
   contest: {
     mode: "live",
     message: "Contest is live.",
@@ -92,10 +112,13 @@ function buildParticipantAggregate(rollNumber) {
     name: latestSession.name,
     rollNumber: latestSession.rollNumber,
     selectedLanguage: latestSession.selectedLanguage,
+    slotId: latestSession.slotId || "",
+    slotName: latestSession.slotName || "",
     assignedQuestion: latestSession.assignedQuestion,
     status: latestSession.status,
     timeTaken: sessions.reduce((sum, entry) => sum + Number(entry.timeTaken || 0), 0),
     tabSwitchCount: sessions.reduce((sum, entry) => sum + Number(entry.tabSwitchCount || 0), 0),
+    fullscreenExitCount: sessions.reduce((sum, entry) => sum + Number(entry.fullscreenExitCount || 0), 0),
     copyAttemptCount: sessions.reduce((sum, entry) => sum + Number(entry.copyAttemptCount || 0), 0),
     pasteAttemptCount: sessions.reduce((sum, entry) => sum + Number(entry.pasteAttemptCount || 0), 0),
     totalQuestionsAttempted,
@@ -185,11 +208,117 @@ export function pickFairQuestion({ excludeQuestionIds = [], rollNumber = "" } = 
   return deepClone(question);
 }
 
-export function createSession({ name, rollNumber, resumeKey, assignedQuestionId, code = "", selectedLanguage = "javascript" }) {
+export function getAllowedTranslationLanguages() {
+  return [...allowedTranslationLanguages];
+}
+
+export function listSlotLanguageAssignments() {
+  return [...state.slots].map((slot) => deepClone(slot));
+}
+
+export function getSlotById(slotId) {
+  const normalizedSlotId = sanitizeSlotId(slotId);
+  return state.slots.find((slot) => sanitizeSlotId(slot.slotId) === normalizedSlotId) || null;
+}
+
+export function getActiveSlot() {
+  const activeSlots = state.slots.filter((slot) => slot.status === "started");
+  if (!activeSlots.length) {
+    return null;
+  }
+
+  return deepClone(
+    [...activeSlots].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0]
+  );
+}
+
+export function createSlot({ name, language }) {
+  const slotName = sanitizeSlotName(name);
+  const slotLanguage = sanitizeLanguage(language);
+
+  if (!slotName || !slotLanguage) {
+    return null;
+  }
+
+  const slot = {
+    slotId: createSlotId(),
+    name: slotName,
+    language: slotLanguage,
+    status: "stopped",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  state.slots.push(slot);
+  return deepClone(slot);
+}
+
+export function updateSlot(slotId, payload = {}) {
+  const slot = getSlotById(slotId);
+  if (!slot) {
+    return null;
+  }
+
+  const target = state.slots.find((entry) => entry.slotId === slot.slotId);
+  if (!target) {
+    return null;
+  }
+
+  const nextName = payload.name !== undefined ? sanitizeSlotName(payload.name) : target.name;
+  const nextLanguage = payload.language !== undefined ? sanitizeLanguage(payload.language) : target.language;
+
+  if (!nextName || !nextLanguage) {
+    return null;
+  }
+
+  target.name = nextName;
+  target.language = nextLanguage;
+  touch(target);
+  return deepClone(target);
+}
+
+export function startSlot(slotId) {
+  const target = state.slots.find((entry) => sanitizeSlotId(entry.slotId) === sanitizeSlotId(slotId));
+  if (!target) {
+    return null;
+  }
+
+  state.slots = state.slots.map((slot) => ({
+    ...slot,
+    status: slot.slotId === target.slotId ? "started" : "stopped",
+    updatedAt: new Date().toISOString()
+  }));
+
+  return deepClone(state.slots.find((slot) => slot.slotId === target.slotId));
+}
+
+export function stopSlot(slotId) {
+  const target = state.slots.find((entry) => sanitizeSlotId(entry.slotId) === sanitizeSlotId(slotId));
+  if (!target) {
+    return null;
+  }
+
+  target.status = "stopped";
+  touch(target);
+  return deepClone(target);
+}
+
+export function getAssignedLanguageForSlot(slotId) {
+  const slot = getSlotById(slotId);
+  return sanitizeLanguage(slot?.language) || null;
+}
+
+export function setSlotLanguageAssignment(slotId, language) {
+  return updateSlot(slotId, { language });
+}
+
+export function createSession({ name, rollNumber, resumeKey, assignedQuestionId, code = "", selectedLanguage = "go", slotId = "", slotName = "" }) {
   const session = {
     _id: createSessionId(),
     name,
     rollNumber,
+    slotId: sanitizeSlotId(slotId) || "",
+    slotName: sanitizeSlotName(slotName) || "",
     resumeKey,
     assignedQuestion: assignedQuestionId,
     selectedLanguage,
@@ -219,6 +348,7 @@ export function createSession({ name, rollNumber, resumeKey, assignedQuestionId,
       }
     },
     tabSwitchCount: 0,
+    fullscreenExitCount: 0,
     copyAttemptCount: 0,
     pasteAttemptCount: 0,
     scoreBreakdown: {
@@ -299,6 +429,8 @@ export function getAttemptHistoryByRollNumber(rollNumber) {
         sessionId: entry._id,
         attemptNumber: index + 1,
         status: entry.status,
+        slotId: entry.slotId || "",
+        slotName: entry.slotName || "",
         selectedLanguage: entry.selectedLanguage,
         questionId: question?._id || entry.assignedQuestion,
         questionTitle: question?.title || "Unknown Question",
@@ -424,4 +556,13 @@ export function getExportRows() {
   return [...state.sessions]
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .map((session) => deepClone(session));
+}
+
+export function getExportRowsBySlot(slotId = "") {
+  const normalizedSlotId = sanitizeSlotId(slotId);
+  if (!normalizedSlotId) {
+    return getExportRows();
+  }
+
+  return getExportRows().filter((session) => sanitizeSlotId(session.slotId) === normalizedSlotId);
 }

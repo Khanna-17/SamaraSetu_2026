@@ -28,6 +28,27 @@ const languageSignals = {
     inputAny: ["prompt(", "readline", "fs.readfilesync"],
     outputAny: ["console.log"],
     controlFlow: ["for", "while", "if", "switch"]
+  },
+  go: {
+    requiredAll: ["func main"],
+    requiredAny: ["package main", "fmt.", "bufio", "os.stdin"],
+    inputAny: ["fmt.fscan", "bufio.newscanner", "os.stdin", "strings.fields"],
+    outputAny: ["fmt.println", "fmt.printf", "fmt.fprintln"],
+    controlFlow: ["for", "if", "switch"]
+  },
+  rust: {
+    requiredAll: ["fn main"],
+    requiredAny: ["std::io", "println!", "read_to_string", "stdin"],
+    inputAny: ["read_to_string", "stdin", "split_whitespace", "read_line"],
+    outputAny: ["println!", "print!", "writeln!"],
+    controlFlow: ["for", "while", "if", "match"]
+  },
+  kotlin: {
+    requiredAll: ["fun main"],
+    requiredAny: ["readline", "println", "scanner", "bufferedreader"],
+    inputAny: ["readline", "scanner", "bufferedreader", "split"],
+    outputAny: ["println", "print"],
+    controlFlow: ["for", "while", "if", "when"]
   }
 };
 
@@ -87,7 +108,13 @@ function countMatches(code, hints = []) {
 function scoreStructureMatch(sourcePython, translatedCode, language) {
   const normalizedPython = normalize(sourcePython);
   const normalizedCode = normalize(translatedCode);
-  const signals = languageSignals[language];
+  const signals = languageSignals[language] || {
+    requiredAll: [],
+    requiredAny: [],
+    inputAny: [],
+    outputAny: [],
+    controlFlow: []
+  };
 
   let score = 0;
 
@@ -102,7 +129,7 @@ function scoreStructureMatch(sourcePython, translatedCode, language) {
   const sourceHasCondition = normalizedPython.includes("if ") || normalizedPython.includes("elif ");
   const sourceHasFunction = normalizedPython.includes("def ");
 
-  const hasLoop = signals.controlFlow.some((token) => normalizedCode.includes(token));
+  const hasLoop = (signals.controlFlow || []).some((token) => normalizedCode.includes(token));
   const hasCondition = normalizedCode.includes("if");
   const hasFunction = normalizedCode.includes("function") || normalizedCode.includes(" main(") || normalizedCode.includes("main(");
 
@@ -138,8 +165,8 @@ function scoreStructureMatch(sourcePython, translatedCode, language) {
 
   const inputHint = normalizedPython.includes("input(") ? 1 : 0;
   const outputHint = normalizedPython.includes("print(") ? 1 : 0;
-  const outputMatched = countMatches(normalizedCode, signals.output) > 0 ? 1 : 0;
-  const entryMatched = countMatches(normalizedCode, signals.entry) > 0 ? 1 : 0;
+  const outputMatched = countMatches(normalizedCode, signals.outputAny) > 0 ? 1 : 0;
+  const entryMatched = countMatches(normalizedCode, signals.requiredAll) > 0 ? 1 : 0;
 
   if (!inputHint || normalizedCode.includes("scanf") || normalizedCode.includes("cin") || normalizedCode.includes("scanner") || normalizedCode.includes("prompt") || normalizedCode.includes("readline") || normalizedCode.includes("fs.readfilesync")) {
     score += 10;
@@ -316,7 +343,10 @@ function evaluateQuestionCompliance({ sourcePython, translatedCode, language, ti
 function evaluateInputOutputHandling(translatedCode, language, testCases = [], sourcePython = "") {
   const normalized = normalize(translatedCode);
   const source = normalize(sourcePython);
-  const signals = languageSignals[language];
+  const signals = languageSignals[language] || {
+    inputAny: [],
+    outputAny: []
+  };
 
   let score = 100;
   const warnings = [];
@@ -433,6 +463,27 @@ async function executeCaseWithJudge0({ sourceCode, language, stdin }) {
   }
 
   return response.json();
+}
+
+export async function runCodeWithJudge0({ sourceCode, language, stdin = "" }) {
+  if (!String(sourceCode || "").trim()) {
+    throw new Error("Code is empty.");
+  }
+
+  const execution = await executeCaseWithJudge0({
+    sourceCode,
+    language,
+    stdin
+  });
+
+  return {
+    stdout: String(execution.stdout || "").replace(/\r\n/g, "\n"),
+    stderr: String(execution.stderr || "").replace(/\r\n/g, "\n").trim(),
+    compileOutput: String(execution.compile_output || "").replace(/\r\n/g, "\n").trim(),
+    message: String(execution.message || "").replace(/\r\n/g, "\n").trim(),
+    statusId: Number(execution.status?.id || 0),
+    statusDescription: String(execution.status?.description || "")
+  };
 }
 
 export async function evaluateWithJudge0({ sourceCode, language, testCases, sourcePython, questionTitle }) {

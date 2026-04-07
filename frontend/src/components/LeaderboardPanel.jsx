@@ -53,7 +53,7 @@ export default function LeaderboardPanel() {
             <span>
               #{row.rank} {row.name}
               <span className="ml-2 text-xs text-slate-400">
-                {row.totalCorrect}/{row.totalQuestionsAttempted} correct
+                {String(row.slotId || "").toUpperCase()} - {String(row.selectedLanguage || "").toUpperCase()} - {row.totalCorrect}/{row.totalQuestionsAttempted} correct
               </span>
             </span>
             <span>{row.finalScore}</span>

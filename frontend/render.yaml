@@ -1,0 +1,21 @@
+services:
+  - type: web
+    runtime: node
+    name: code-translation-arena-backend
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+
+  - type: web
+    runtime: static
+    name: code-translation-arena-frontend
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: frontend/dist
+    autoDeploy: true
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

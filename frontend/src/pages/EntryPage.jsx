@@ -95,7 +95,6 @@ export default function EntryPage() {
                   placeholder="e.g. CS24-007"
                 />
               </label>
-
               {error ? <p className="text-sm text-rose-300">{error}</p> : null}
 
               <div className="flex flex-wrap gap-3 pt-2">
@@ -111,10 +110,10 @@ export default function EntryPage() {
             <h2 className="font-display text-2xl text-sky-100">Before You Start</h2>
             <ul className="space-y-2 text-sm text-slate-300">
               <li>1. You can attempt multiple balanced Python questions.</li>
-              <li>2. Translate into C, C++, Java, or JavaScript.</li>
+              <li>2. Admin chooses and starts one active slot for everyone.</li>
               <li>3. Hidden tests decide accuracy.</li>
               <li>4. AI gives feedback, but only testcase passing affects score.</li>
-              <li>5. Admin can pause or stop the contest centrally.</li>
+              <li>5. Language cheat sheet will be visible during the challenge.</li>
             </ul>
             <p className="rounded-2xl border border-sky-900/40 bg-slate-950/45 p-4 text-sm text-slate-300">
               Leaderboard access is available in the admin console only.

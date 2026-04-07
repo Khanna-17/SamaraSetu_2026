@@ -12,6 +12,8 @@ router.get("/live", requireAdmin, async (_req, res) => {
       rank: index + 1,
       name: user.name,
       rollNumber: user.rollNumber,
+      slotId: user.slotId || "",
+      slotName: user.slotName || "",
       selectedLanguage: user.selectedLanguage,
       finalScore: user.scoreBreakdown.finalScore,
       timeTaken: user.timeTaken,
