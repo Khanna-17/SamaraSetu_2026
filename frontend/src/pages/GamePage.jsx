@@ -176,8 +176,7 @@ export default function GamePage() {
 
     const preferredBoilerplate = boilerplates[selectedLanguage] || "";
     const previousBoilerplate = boilerplates[session.selectedLanguage] || "";
-    const isUsingPreviousBoilerplate =
-      !code.trim() || code === previousBoilerplate;
+    const isUsingPreviousBoilerplate = !code.trim() || code === previousBoilerplate;
 
     if (isUsingPreviousBoilerplate && preferredBoilerplate && selectedLanguage !== session.selectedLanguage) {
       setCode(preferredBoilerplate);
@@ -217,8 +216,7 @@ export default function GamePage() {
 
     function handleKeyDown(event) {
       const key = event.key.toLowerCase();
-      const isClipboardShortcut =
-        (event.ctrlKey || event.metaKey) && ["c", "v", "x", "a"].includes(key);
+      const isClipboardShortcut = (event.ctrlKey || event.metaKey) && ["c", "v", "x", "a"].includes(key);
 
       if (isClipboardShortcut) {
         event.preventDefault();
@@ -361,72 +359,101 @@ export default function GamePage() {
   const editingLocked = contestState.mode !== "live";
 
   return (
-    <main className="relative min-h-screen select-none bg-black px-4 py-4 text-sky-50">
+    <main className="relative min-h-screen select-none bg-black px-4 py-6 text-sky-50">
       <ParticleBackground />
-      <div className="relative mx-auto flex max-w-[1400px] flex-col gap-4">
-        <GlassCard className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="relative mx-auto flex max-w-[1440px] flex-col gap-6">
+        <GlassCard className="space-y-6">
+          <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-sky-400">{session.question.difficulty} challenge • {session.question.category || "logic"}</p>
-              <h1 className="font-display text-2xl text-sky-100">{session.question.title}</h1>
-              <p className="text-sm text-slate-300">Hint: {session.question.hint}</p>
+              <p className="text-xs uppercase tracking-[0.2em] text-cyan-300">{session.question.difficulty} challenge | {session.question.category || "logic"}</p>
+              <h1 className="mt-2 font-display text-3xl text-slate-50">{session.question.title}</h1>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">Hint: {session.question.hint}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <NeonButton className="px-3 py-2 text-sm" onClick={toggleFullscreen}>
                 {fullscreenActive ? "Exit Exam Mode" : "Enter Exam Mode"}
               </NeonButton>
-              <p className="rounded-xl border border-sky-800/40 bg-sky-900/18 px-3 py-2 text-sm text-sky-100">{randomCheer}</p>
+              <p className="rounded-2xl border border-slate-700/60 bg-slate-950/70 px-3 py-2 text-sm text-slate-300">{randomCheer}</p>
             </div>
           </div>
           <TimerBar elapsed={elapsed} expectedSeconds={session.question.expectedTimeSeconds} />
-          <p className={`rounded-xl border px-3 py-2 text-sm ${editingLocked ? "border-slate-700/60 bg-slate-900/60 text-sky-200" : "border-sky-300/20 bg-sky-100/5 text-sky-100"}`}>
-            {contestState.message || "Contest is live."}
-          </p>
           <div className="flex flex-wrap gap-3">
-            <NeonButton onClick={runCode} disabled={running || editingLocked}>{running ? "Running..." : "Run"}</NeonButton>
-            <NeonButton onClick={submitCode} disabled={submitting || editingLocked}>{submitting ? "Evaluating..." : "Submit Translation"}</NeonButton>
+            <StatusChip label="Contest" value={contestState.mode} accent={contestState.mode === "live"} />
+            <StatusChip label="Expected time" value={`${session.question.expectedTimeSeconds}s`} />
+            <StatusChip label="Scoring" value="Tests only" />
+            <StatusChip label="Autosave" value={saving ? "syncing" : "active"} accent={!saving} />
+          </div>
+          <div className={`rounded-2xl border px-4 py-3 text-sm ${editingLocked ? "border-slate-700/70 bg-slate-950/80 text-slate-300" : "border-sky-300/12 bg-slate-950/70 text-slate-200"}`}>
+            {contestState.message || "Contest is live."}
+          </div>
+          <div className="flex flex-wrap gap-3 border-t border-slate-800/80 pt-2">
+            <NeonButton className="bg-cyan-300/16 text-cyan-50 hover:bg-cyan-300/22" onClick={runCode} disabled={running || editingLocked}>
+              {running ? "Running..." : "Run"}
+            </NeonButton>
+            <NeonButton className="bg-cyan-400/18 text-cyan-50 hover:bg-cyan-400/24" onClick={submitCode} disabled={submitting || editingLocked}>
+              {submitting ? "Evaluating..." : "Submit Translation"}
+            </NeonButton>
+            <div className="ml-auto flex flex-wrap gap-2 text-xs">
+              <QuietPill label="Tabs" value={tabSwitchCount} />
+              <QuietPill label="Copy" value={copyAttemptCount} />
+              <QuietPill label="Paste" value={pasteAttemptCount} />
+            </div>
           </div>
         </GlassCard>
 
-        <GlassCard>
-          <h3 className="font-display text-xl text-sky-100">Question Brief</h3>
-          <div className="mt-3 grid gap-3 md:grid-cols-2">
-            <div className="rounded-2xl border border-sky-300/15 bg-black/35 p-4 text-sm text-slate-300">
-              <p className="text-sky-100">What to do</p>
-              <p className="mt-2">Translate the Python source exactly into {languageOptions.find((option) => option.value === selectedLanguage)?.label || "your selected language"}.</p>
-              <p className="mt-2">Keep the same input and output behavior, including edge cases.</p>
+        <GlassCard className="space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="font-display text-2xl text-slate-50">Question Brief</h3>
+            <p className="text-sm text-slate-400">Translate the Python source into {languageOptions.find((option) => option.value === selectedLanguage)?.label || "your selected language"} with identical behavior.</p>
+          </div>
+          <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr_0.9fr]">
+            <div className="rounded-3xl border border-slate-800/80 bg-slate-950/68 p-5 text-sm text-slate-300">
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-cyan-300">Mission</p>
+              <p className="mt-3 leading-6">Translate the Python source exactly into {languageOptions.find((option) => option.value === selectedLanguage)?.label || "your selected language"}.</p>
+              <p className="mt-2 leading-6">Preserve the same input and output behavior, including empty input, edge cases, and output formatting.</p>
             </div>
-            <div className="rounded-2xl border border-sky-300/15 bg-black/35 p-4 text-sm text-slate-300">
-              <p className="text-sky-100">Before you submit</p>
-              <ul className="mt-2 space-y-1">
+            <div className="rounded-3xl border border-slate-800/80 bg-slate-950/68 p-5 text-sm text-slate-300">
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-cyan-300">Checklist</p>
+              <ul className="mt-2 space-y-1.5">
                 <li>Match the source program logic closely.</li>
                 <li>Print only the final expected output.</li>
                 <li>Check how empty input or single values behave.</li>
               </ul>
             </div>
-          </div>
-          <div className="mt-4 grid gap-3 md:grid-cols-[1.1fr_0.9fr]">
-            <div className="rounded-2xl border border-sky-300/15 bg-black/35 p-4">
-              <p className="text-sm text-sky-100">Run With Custom Input</p>
+            <div className="rounded-3xl border border-slate-800/80 bg-slate-950/68 p-5">
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-cyan-300">Run With Custom Input</p>
               <textarea
                 value={runInput}
                 onChange={(event) => setRunInput(event.target.value)}
-                className="mt-3 h-28 w-full rounded-xl border border-sky-300/20 bg-black/45 px-3 py-2 font-mono text-sm text-sky-50 outline-none"
+                className="mt-3 h-32 w-full rounded-2xl border border-slate-800 bg-black/45 px-3 py-3 font-mono text-sm text-sky-50 outline-none"
                 placeholder="Enter stdin here exactly as the program should receive it"
               />
+              <p className="mt-3 text-xs text-slate-500">Use this to preview output before final submission.</p>
             </div>
-            <div className="rounded-2xl border border-sky-300/15 bg-black/35 p-4">
-              <p className="text-sm text-sky-100">Run Output</p>
-              <pre className="mt-3 min-h-[84px] whitespace-pre-wrap break-words rounded-xl border border-sky-900/30 bg-slate-950/60 p-3 font-mono text-sm text-slate-200">{runOutput || "[no output yet]"}</pre>
-              {runNotes ? <p className="mt-3 text-xs text-slate-400">{runNotes}</p> : null}
+          </div>
+          <div className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
+            <div className="rounded-3xl border border-slate-800/80 bg-slate-950/68 p-5">
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-cyan-300">Run Output</p>
+              <pre className="mt-3 min-h-[128px] whitespace-pre-wrap break-words rounded-2xl border border-slate-800 bg-black/55 p-4 font-mono text-sm text-slate-200">{runOutput || "[no output yet]"}</pre>
+              {runNotes ? <p className="mt-3 text-xs leading-5 text-slate-400">{runNotes}</p> : null}
+            </div>
+            <div className="rounded-3xl border border-slate-800/80 bg-slate-950/68 p-5">
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-cyan-300">Integrity Signals</p>
+              <div className="mt-4 grid gap-3">
+                <SignalRow label="Tab switches" value={tabSwitchCount} />
+                <SignalRow label="Copy attempts" value={copyAttemptCount} />
+                <SignalRow label="Paste attempts" value={pasteAttemptCount} />
+                {guardMessage ? <p className="rounded-2xl border border-rose-500/20 bg-rose-500/8 px-3 py-2 text-xs text-rose-200">{guardMessage}</p> : null}
+                {error ? <p className="rounded-2xl border border-rose-500/20 bg-rose-500/8 px-3 py-2 text-xs text-rose-200">{error}</p> : null}
+              </div>
             </div>
           </div>
         </GlassCard>
 
-        <div className="grid min-h-[62vh] gap-4 lg:grid-cols-2">
-          <GlassCard className="flex min-h-[300px] flex-col">
-            <div className="mb-3 text-xs uppercase tracking-[0.2em] text-sky-400">Python Source (Read-only)</div>
-            <div className="flex-1 overflow-hidden rounded-2xl border border-sky-300/18 [user-select:none] [&_*]:select-none">
+        <div className="grid min-h-[62vh] gap-6 lg:grid-cols-2">
+          <GlassCard className="flex min-h-[320px] flex-col">
+            <div className="mb-4 text-xs uppercase tracking-[0.2em] text-cyan-300">Python Source (Read-only)</div>
+            <div className="flex-1 overflow-hidden rounded-[24px] border border-slate-800 [user-select:none] [&_*]:select-none">
               <Editor
                 theme="vs-dark"
                 language="python"
@@ -436,13 +463,13 @@ export default function GamePage() {
             </div>
           </GlassCard>
 
-          <GlassCard className="flex min-h-[300px] flex-col">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div className="text-xs uppercase tracking-[0.2em] text-sky-400">Your Translation</div>
+          <GlassCard className="flex min-h-[320px] flex-col">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">Your Translation</div>
               <select
                 value={selectedLanguage}
                 onChange={(event) => setSelectedLanguage(event.target.value)}
-                className="rounded-lg border border-sky-300/25 bg-black/55 px-2 py-1 text-sm text-sky-50"
+                className="rounded-xl border border-slate-700 bg-black/55 px-3 py-2 text-sm text-sky-50"
               >
                 {languageOptions.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -451,7 +478,7 @@ export default function GamePage() {
                 ))}
               </select>
             </div>
-            <div className="flex-1 overflow-hidden rounded-2xl border border-sky-900/35">
+            <div className="flex-1 overflow-hidden rounded-[24px] border border-slate-800">
               <Editor
                 theme="vs-dark"
                 language={monacoLanguage}
@@ -460,32 +487,52 @@ export default function GamePage() {
                 options={{ minimap: { enabled: false }, fontSize: 14, selectionClipboard: false, readOnly: editingLocked }}
               />
             </div>
-            <p className="mt-3 text-xs text-slate-400">Expected time: {session.question.expectedTimeSeconds}s • Final score uses testcase pass percentage only.</p>
+            <p className="mt-4 text-xs text-slate-500">Expected time: {session.question.expectedTimeSeconds}s | Final score uses testcase pass percentage only.</p>
           </GlassCard>
         </div>
 
-        <GlassCard>
-          <h3 className="font-display text-xl text-sky-100">Attempt History</h3>
-          <div className="mt-3 grid gap-2 md:grid-cols-2">
+        <GlassCard className="space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="font-display text-xl text-slate-50">Attempt History</h3>
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Previous submissions</p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
             {attemptHistory.length ? attemptHistory.map((attempt) => (
-              <div key={attempt.sessionId} className="rounded-xl border border-sky-300/15 bg-black/35 p-3 text-sm text-slate-300">
-                <p className="text-sky-100">Attempt {attempt.attemptNumber}: {attempt.questionTitle}</p>
-                <p>{attempt.difficulty} • {attempt.category}</p>
-                <p>{attempt.passed}/{attempt.total} tests • Score {attempt.finalScore}</p>
-              </div>
-            )) : <p className="text-sm text-slate-400">No completed attempts yet.</p>}
+              <motion.div key={attempt.sessionId} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-3xl border border-slate-800/90 bg-slate-950/68 p-4 text-sm text-slate-300">
+                <p className="text-slate-100">Attempt {attempt.attemptNumber}: {attempt.questionTitle}</p>
+                <p className="mt-2 text-slate-400">{attempt.difficulty} | {attempt.category}</p>
+                <p className="mt-2 text-cyan-200">{attempt.passed}/{attempt.total} tests | Score {attempt.finalScore}</p>
+              </motion.div>
+            )) : <p className="text-sm text-slate-500">No completed attempts yet.</p>}
           </div>
         </GlassCard>
-
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-wrap items-center gap-3">
-          <span className="text-sm text-slate-300">Auto-save: {saving ? "syncing..." : "active"}</span>
-          <span className="text-sm text-slate-300">Tab switches: {tabSwitchCount}</span>
-          <span className="text-sm text-slate-300">Copy attempts: {copyAttemptCount}</span>
-          <span className="text-sm text-slate-300">Paste attempts: {pasteAttemptCount}</span>
-          {guardMessage ? <span className="text-sm text-red-300">{guardMessage}</span> : null}
-          {error ? <span className="text-sm text-rose-300">{error}</span> : null}
-        </motion.div>
       </div>
     </main>
+  );
+}
+
+function StatusChip({ label, value, accent = false }) {
+  return (
+    <div className={`rounded-2xl border px-3 py-2 text-sm ${accent ? "border-cyan-300/30 bg-cyan-300/10 text-cyan-100" : "border-slate-700/70 bg-slate-950/75 text-slate-300"}`}>
+      <span className="text-slate-500">{label}: </span>
+      <span className="font-semibold">{value}</span>
+    </div>
+  );
+}
+
+function QuietPill({ label, value }) {
+  return (
+    <span className="rounded-full border border-slate-700/70 bg-slate-950/72 px-3 py-2 text-slate-300">
+      {label}: {value}
+    </span>
+  );
+}
+
+function SignalRow({ label, value }) {
+  return (
+    <div className="flex items-center justify-between rounded-2xl border border-slate-800 bg-black/35 px-3 py-3 text-sm text-slate-300">
+      <span>{label}</span>
+      <span className="font-semibold text-slate-100">{value}</span>
+    </div>
   );
 }

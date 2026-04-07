@@ -43,20 +43,23 @@ export default function LeaderboardPanel() {
   }, []);
 
   return (
-    <div className="rounded-2xl border border-sky-900/45 bg-slate-950/50 p-4">
-      <h3 className="mb-3 font-display text-lg text-sky-100">Live Leaderboard</h3>
+    <div className="rounded-3xl border border-slate-800/90 bg-slate-950/68 p-5">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h3 className="font-display text-xl text-slate-50">Live Leaderboard</h3>
+        <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Admin only</p>
+      </div>
       <div className="max-h-56 space-y-2 overflow-auto pr-1">
         {error ? <p className="text-sm text-rose-300">{error}</p> : null}
-        {rows.length === 0 ? <p className="text-sm text-slate-300">No finished runs yet.</p> : null}
+        {rows.length === 0 ? <p className="text-sm text-slate-400">No finished runs yet.</p> : null}
         {rows.map((row) => (
-          <div key={`${row.rollNumber}-${row.rank}`} className="flex items-center justify-between rounded-xl bg-slate-950/70 px-3 py-2 text-sm text-sky-100">
+          <div key={`${row.rollNumber}-${row.rank}`} className="flex items-center justify-between rounded-2xl border border-slate-800 bg-black/35 px-4 py-3 text-sm text-slate-100">
             <span>
               #{row.rank} {row.name}
-              <span className="ml-2 text-xs text-slate-400">
+              <span className="ml-2 text-xs text-slate-500">
                 {row.totalCorrect}/{row.totalQuestionsAttempted} correct
               </span>
             </span>
-            <span>{row.finalScore}</span>
+            <span className="text-cyan-200">{row.finalScore}</span>
           </div>
         ))}
       </div>

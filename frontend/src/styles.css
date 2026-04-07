@@ -4,13 +4,14 @@
 :root {
   color-scheme: dark;
   --bg-primary: #03060c;
-  --bg-secondary: #07111f;
-  --panel-bg: rgba(8, 18, 32, 0.82);
-  --panel-border: rgba(132, 189, 255, 0.24);
-  --text-primary: #dceeff;
-  --text-secondary: #9fbddd;
-  --accent-blue: #6ea8ff;
-  --accent-steel: #9ac4e8;
+  --bg-secondary: #0a1321;
+  --panel-bg: rgba(10, 18, 30, 0.9);
+  --panel-bg-soft: rgba(9, 16, 28, 0.72);
+  --panel-border: rgba(123, 170, 219, 0.18);
+  --text-primary: #d9e8f7;
+  --text-secondary: #90a7bf;
+  --accent-blue: #51c8ff;
+  --accent-steel: #a7bfd4;
 }
 
 * {
@@ -21,10 +22,14 @@ body {
   margin: 0;
   font-family: "Exo 2", sans-serif;
   background:
-    radial-gradient(circle at top, rgba(110, 168, 255, 0.1), transparent 32%),
-    radial-gradient(circle at bottom right, rgba(39, 88, 153, 0.18), transparent 28%),
+    radial-gradient(circle at top, rgba(81, 200, 255, 0.06), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(54, 91, 138, 0.14), transparent 24%),
     linear-gradient(180deg, #03060c 0%, #081221 100%);
   color: var(--text-primary);
+}
+
+#root {
+  min-height: 100vh;
 }
 
 .font-display {

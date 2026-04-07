@@ -48,69 +48,68 @@ export default function ResultPage() {
     <main className="relative min-h-screen bg-black px-4 py-10 text-sky-50">
       {highScore ? <Confetti numberOfPieces={240} recycle={false} /> : null}
       <ParticleBackground />
-      <div className="relative mx-auto max-w-4xl space-y-5">
-        <GlassCard>
-          <p className="text-xs uppercase tracking-[0.2em] text-sky-400">Mission Complete</p>
+      <div className="relative mx-auto max-w-5xl space-y-6">
+        <GlassCard className="space-y-4">
+          <p className="text-xs uppercase tracking-[0.2em] text-cyan-300">Mission Complete</p>
           <motion.h1
-            className="font-display text-6xl text-sky-100"
+            className="font-display text-6xl text-slate-50"
             initial={{ scale: 0.6, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ type: "spring", stiffness: 140 }}
           >
             {finalScore}
           </motion.h1>
-          <p className="mt-2 text-slate-300">Final Score</p>
+          <p className="text-slate-400">Final Score</p>
         </GlassCard>
 
         <div className="grid gap-4 md:grid-cols-3">
           <GlassCard>
-            <h3 className="font-display text-xl text-sky-100">Tests</h3>
-            <p className="mt-3 text-2xl text-sky-300">{result.testReport?.passed || 0} / {result.testReport?.total || 0}</p>
+            <h3 className="font-display text-xl text-slate-50">Tests</h3>
+            <p className="mt-4 text-3xl text-cyan-300">{result.testReport?.passed || 0} / {result.testReport?.total || 0}</p>
           </GlassCard>
           <GlassCard>
-            <h3 className="font-display text-xl text-sky-100">Accuracy</h3>
-            <p className="mt-3 text-2xl text-sky-300">{result.scoreBreakdown?.accuracyScore || 0}</p>
+            <h3 className="font-display text-xl text-slate-50">Accuracy</h3>
+            <p className="mt-4 text-3xl text-cyan-300">{result.scoreBreakdown?.accuracyScore || 0}</p>
           </GlassCard>
           <GlassCard>
-            <h3 className="font-display text-xl text-sky-100">Scoring Rule</h3>
-            <p className="mt-3 text-sm text-sky-200">Final score is based only on testcase pass percentage.</p>
+            <h3 className="font-display text-xl text-slate-50">Scoring Rule</h3>
+            <p className="mt-4 text-sm leading-6 text-slate-300">Final score is based only on testcase pass percentage.</p>
           </GlassCard>
         </div>
 
-        <GlassCard>
-          <h3 className="font-display text-2xl text-sky-100">Submission Diagnostics</h3>
-          <div className="mt-3 grid gap-3 md:grid-cols-2">
-            <div className="text-sm text-slate-300">
-              <p>Structure score: {diagnostics.structureScore || 0}</p>
-              <p>Language score: {diagnostics.languageScore || 0}</p>
-              <p>Question score: {diagnostics.questionScore || 0}</p>
-              <p>I/O score: {diagnostics.ioScore || 0}</p>
-            </div>
-            <div className="text-sm text-slate-300">
-              <p>Language warnings: {(diagnostics.languageWarnings || []).join(", ") || "None"}</p>
-              <p>I/O warnings: {(diagnostics.ioWarnings || []).join(", ") || "None"}</p>
-              <p>Missing signals: {(diagnostics.missingQuestionSignals || []).join(", ") || "None"}</p>
-            </div>
+        <GlassCard className="space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="font-display text-2xl text-slate-50">Submission Review</h3>
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Primary signal: testcase pass rate</p>
           </div>
-          {result.testReport?.compileError ? <p className="mt-4 text-sm text-rose-300">Compile Error: {result.testReport.compileError}</p> : null}
-          {result.testReport?.runtimeError ? <p className="mt-2 text-sm text-rose-300">Runtime Error: {result.testReport.runtimeError}</p> : null}
+
+          {(result.testReport?.compileError || result.testReport?.runtimeError) ? (
+            <div className="rounded-3xl border border-rose-500/20 bg-rose-500/8 p-4 text-sm text-rose-200">
+              {result.testReport?.compileError ? <p>Compile Error: {result.testReport.compileError}</p> : null}
+              {result.testReport?.runtimeError ? <p className={result.testReport?.compileError ? "mt-2" : ""}>Runtime Error: {result.testReport.runtimeError}</p> : null}
+            </div>
+          ) : null}
+
           {failedCases.length ? (
-            <div className="mt-4 space-y-3">
-              <p className="text-sm text-sky-100">Failed testcase viewer</p>
+            <div className="space-y-4 rounded-3xl border border-slate-800/90 bg-slate-950/68 p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-lg font-semibold text-slate-100">Failed Testcase Viewer</p>
+                <p className="text-sm text-slate-500">Inspect one failure at a time</p>
+              </div>
               <div className="flex flex-wrap gap-2">
                 {failedCases.map((item, index) => (
                   <button
                     key={`${item.stdin}-${index}`}
                     type="button"
                     onClick={() => setActiveFailedCaseIndex(index)}
-                    className={`rounded-xl border px-3 py-2 text-xs ${index === activeFailedCaseIndex ? "border-sky-300/40 bg-sky-100/10 text-sky-100" : "border-sky-900/35 bg-slate-950/50 text-slate-300"}`}
+                    className={`rounded-2xl border px-4 py-2 text-sm ${index === activeFailedCaseIndex ? "border-cyan-300/35 bg-cyan-300/10 text-cyan-100" : "border-slate-800 bg-black/40 text-slate-400"}`}
                   >
                     Case {index + 1}
                   </button>
                 ))}
               </div>
               {activeFailedCase ? (
-                <div className="grid gap-3 md:grid-cols-3">
+                <div className="grid gap-4 md:grid-cols-3">
                   <CasePanel title="Input" value={activeFailedCase.stdin} />
                   <CasePanel title="Expected" value={activeFailedCase.expectedOutput} />
                   <CasePanel title="Observed" value={activeFailedCase.actualOutput} status={activeFailedCase.status} />
@@ -118,34 +117,56 @@ export default function ResultPage() {
               ) : null}
             </div>
           ) : null}
+
+          <details className="rounded-3xl border border-slate-800/90 bg-slate-950/68 p-5">
+            <summary className="cursor-pointer list-none text-lg font-semibold text-slate-100">
+              Diagnostics Details
+            </summary>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <div className="text-sm leading-7 text-slate-300">
+                <p>Structure score: {diagnostics.structureScore || 0}</p>
+                <p>Language score: {diagnostics.languageScore || 0}</p>
+                <p>Question score: {diagnostics.questionScore || 0}</p>
+                <p>I/O score: {diagnostics.ioScore || 0}</p>
+              </div>
+              <div className="text-sm leading-7 text-slate-300">
+                <p>Language warnings: {(diagnostics.languageWarnings || []).join(", ") || "None"}</p>
+                <p>I/O warnings: {(diagnostics.ioWarnings || []).join(", ") || "None"}</p>
+                <p>Missing signals: {(diagnostics.missingQuestionSignals || []).join(", ") || "None"}</p>
+              </div>
+            </div>
+          </details>
         </GlassCard>
 
-        <GlassCard>
-          <h3 className="font-display text-2xl text-sky-100">Attempt History</h3>
-          <div className="mt-3 grid gap-2 md:grid-cols-2">
+        <GlassCard className="space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="font-display text-2xl text-slate-50">Attempt History</h3>
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Across this session</p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
             {(result.attemptHistory || []).length ? (
               result.attemptHistory.map((attempt) => (
-                <div key={attempt.sessionId} className="rounded-xl border border-sky-300/15 bg-black/35 p-3 text-sm text-slate-300">
-                  <p className="text-sky-100">Attempt {attempt.attemptNumber}: {attempt.questionTitle}</p>
-                  <p>{attempt.difficulty} • {attempt.category}</p>
-                  <p>{attempt.passed}/{attempt.total} tests • Score {attempt.finalScore}</p>
+                <div key={attempt.sessionId} className="rounded-3xl border border-slate-800/90 bg-slate-950/68 p-4 text-sm text-slate-300">
+                  <p className="text-slate-100">Attempt {attempt.attemptNumber}: {attempt.questionTitle}</p>
+                  <p className="mt-2 text-slate-400">{attempt.difficulty} | {attempt.category}</p>
+                  <p className="mt-2 text-cyan-200">{attempt.passed}/{attempt.total} tests | Score {attempt.finalScore}</p>
                 </div>
               ))
             ) : (
-              <p className="text-sm text-slate-400">No attempt history available.</p>
+              <p className="text-sm text-slate-500">No attempt history available.</p>
             )}
           </div>
         </GlassCard>
 
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           {canAttemptMore ? (
-            <NeonButton className="border-sky-700/50 bg-sky-900/20 text-sky-100 hover:bg-sky-900/35" onClick={nextQuestion} disabled={loadingNext}>
+            <NeonButton className="bg-cyan-300/16 text-cyan-50 hover:bg-cyan-300/22" onClick={nextQuestion} disabled={loadingNext}>
               {loadingNext ? "Loading..." : "Next Question"}
             </NeonButton>
           ) : null}
           <NeonButton onClick={() => navigate("/")}>Back to Home</NeonButton>
           <NeonButton
-            className="border-slate-700/70 bg-slate-950/55 text-sky-200 hover:bg-slate-900/70"
+            className="border-slate-700/70 bg-slate-950/55 text-slate-200 hover:bg-slate-900/70"
             onClick={() => {
               localStorage.removeItem("arena_user_token");
               localStorage.removeItem("arena_resume_key");
@@ -165,10 +186,10 @@ export default function ResultPage() {
 
 function CasePanel({ title, value, status }) {
   return (
-    <div className="rounded-2xl border border-sky-900/35 bg-slate-950/50 p-3 text-xs text-slate-300">
-      <p className="text-sky-100">{title}</p>
-      <pre className="mt-2 whitespace-pre-wrap break-words font-mono text-[11px] text-slate-200">{value || "[empty]"}</pre>
-      {status ? <p className="mt-2 text-red-200">{status}</p> : null}
+    <div className="rounded-3xl border border-slate-800/90 bg-black/45 p-4 text-xs text-slate-300">
+      <p className="text-sm font-semibold text-slate-100">{title}</p>
+      <pre className="mt-3 whitespace-pre-wrap break-words font-mono text-[11px] text-slate-200">{value || "[empty]"}</pre>
+      {status ? <p className="mt-3 text-rose-200">{status}</p> : null}
     </div>
   );
 }
