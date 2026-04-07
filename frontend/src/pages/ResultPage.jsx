@@ -78,13 +78,6 @@ export default function ResultPage() {
         </div>
 
         <GlassCard>
-          <h3 className="font-display text-2xl text-sky-100">AI Feedback</h3>
-          <p className="mt-2 text-slate-300">{result.aiEvaluation?.feedback || "Solid work."}</p>
-          {result.testReport?.compileError ? <p className="mt-3 text-sm text-rose-300">Compile Error: {result.testReport.compileError}</p> : null}
-          {result.testReport?.runtimeError ? <p className="mt-3 text-sm text-rose-300">Runtime Error: {result.testReport.runtimeError}</p> : null}
-        </GlassCard>
-
-        <GlassCard>
           <h3 className="font-display text-2xl text-sky-100">Submission Diagnostics</h3>
           <div className="mt-3 grid gap-3 md:grid-cols-2">
             <div className="text-sm text-slate-300">
@@ -99,6 +92,8 @@ export default function ResultPage() {
               <p>Missing signals: {(diagnostics.missingQuestionSignals || []).join(", ") || "None"}</p>
             </div>
           </div>
+          {result.testReport?.compileError ? <p className="mt-4 text-sm text-rose-300">Compile Error: {result.testReport.compileError}</p> : null}
+          {result.testReport?.runtimeError ? <p className="mt-2 text-sm text-rose-300">Runtime Error: {result.testReport.runtimeError}</p> : null}
           {failedCases.length ? (
             <div className="mt-4 space-y-3">
               <p className="text-sm text-sky-100">Failed testcase viewer</p>

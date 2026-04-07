@@ -248,7 +248,6 @@ export default function AdminDashboardPage() {
                 <p><strong>Tab switches:</strong> {detail.tabSwitchCount || 0}</p>
                 <p><strong>Copy attempts:</strong> {detail.copyAttemptCount || 0}</p>
                 <p><strong>Paste attempts:</strong> {detail.pasteAttemptCount || 0}</p>
-                <p><strong>Feedback:</strong> {detail.aiEvaluation?.feedback || ""}</p>
                 <p><strong>Language warnings:</strong> {(detail.testReport?.diagnostics?.languageWarnings || []).join(", ") || "None"}</p>
                 <p><strong>I/O warnings:</strong> {(detail.testReport?.diagnostics?.ioWarnings || []).join(", ") || "None"}</p>
                 <p><strong>Missing signals:</strong> {(detail.testReport?.diagnostics?.missingQuestionSignals || []).join(", ") || "None"}</p>
