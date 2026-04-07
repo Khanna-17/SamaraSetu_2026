@@ -3,8 +3,7 @@ import jwt from "jsonwebtoken";
 import { body } from "express-validator";
 import { requireUser } from "../middleware/auth.js";
 import { validateRequest } from "../middleware/validate.js";
-import { evaluateWithAi } from "../services/aiEvaluator.js";
-import { evaluateWithJudge0, runCodeWithJudge0 } from "../services/judge0.js";
+import { compileWithAi, evaluateTestCasesWithAi, evaluateWithAi, runCodeWithAi } from "../services/aiEvaluator.js";
 import { computeAiTotal, computeFinalScore, computeTimeScore } from "../services/scoring.js";
 import { getIo } from "../config/socket.js";
 import { pickFairQuestion } from "../services/questionSelector.js";
@@ -80,7 +79,6 @@ function basicCompileCheck(code, language) {
     result.ok = false;
     result.messages.push("Kotlin program should include 'fun main'.");
   }
-<<<<<<< HEAD
   if (language === "java" && !normalized.includes("public static void main")) {
     result.ok = false;
     result.messages.push("Java program should include 'public static void main'.");
@@ -92,20 +90,11 @@ function basicCompileCheck(code, language) {
   if (language === "javascript" && !normalized.includes("console.log") && !normalized.includes("return")) {
     result.messages.push("JavaScript output signal not found. Add console.log or return as needed.");
   }
-
-=======
->>>>>>> 3b4f522117872b7cf5bff21921bfd3c37c404eba
   if (result.ok) {
     result.messages.push("Basic compile checks passed.");
   }
 
   return result;
-}
-
-function isCompilationFailure(execution) {
-  const statusId = Number(execution?.statusId || 0);
-  const statusText = String(execution?.statusDescription || "").toLowerCase();
-  return statusId === 6 || statusText.includes("compilation error");
 }
 
 router.get("/session", requireUser, async (req, res) => {
@@ -231,39 +220,22 @@ router.post(
       return res.json({ ok: false, messages: compile.messages });
     }
 
-    if (!process.env.JUDGE0_BASE_URL) {
-      return res.json({
-        ok: false,
-        messages: ["Judge0 is not configured. Set JUDGE0_BASE_URL to enable compile checks."]
-      });
-    }
-
     try {
-      const execution = await runCodeWithJudge0({
-        sourceCode: code,
-        language: selectedLanguage,
-        stdin: ""
+      const aiCompile = await compileWithAi({
+        sourcePython: assignedQuestion?.pythonCode || "",
+        userCode: code,
+        targetLanguage: selectedLanguage,
+        questionTitle: assignedQuestion?.title || ""
       });
 
-      if (isCompilationFailure(execution)) {
+      if (!aiCompile.ok) {
         return res.json({
           ok: false,
-          messages: [
-            "Compilation failed.",
-            String(execution.compileOutput || execution.stderr || execution.message || execution.statusDescription || "Unknown compile error")
-          ]
+          messages: [...compile.messages, ...aiCompile.messages]
         });
       }
 
-      const messages = ["Compilation successful on Judge0."];
-      if (execution.compileOutput) {
-        messages.push(`Compiler note: ${execution.compileOutput}`);
-      }
-      if (execution.stderr) {
-        messages.push(`Runtime warning: ${execution.stderr}`);
-      }
-
-      return res.json({ ok: true, messages });
+      return res.json({ ok: true, messages: [...compile.messages, ...aiCompile.messages] });
     } catch (error) {
       return res.json({
         ok: false,
@@ -287,6 +259,7 @@ router.post(
     if (!session || session.status !== "in-progress") {
       return res.status(404).json({ message: "Session not found" });
     }
+    const assignedQuestion = getQuestionById(session.assignedQuestion);
 
     const selectedLanguage = req.body.selectedLanguage;
     if (!isAllowedLanguage(selectedLanguage)) {
@@ -310,45 +283,19 @@ router.post(
       });
     }
 
-    if (!process.env.JUDGE0_BASE_URL) {
-      return res.json({
-        output: "",
-        notes: "Run preview is unavailable because Judge0 is not configured.",
-        message: "Run preview is unavailable because Judge0 is not configured."
-      });
-    }
-
     try {
-      const execution = await runCodeWithJudge0({
-        sourceCode: code,
-        language: selectedLanguage,
+      const preview = await runCodeWithAi({
+        sourcePython: assignedQuestion?.pythonCode || "",
+        userCode: code,
+        targetLanguage: selectedLanguage,
         stdin
+        ,
+        questionTitle: assignedQuestion?.title || ""
       });
 
-      if (isCompilationFailure(execution)) {
-        return res.json({
-          output: "",
-          notes: String(execution.compileOutput || execution.stderr || execution.message || execution.statusDescription || "Compilation failed."),
-          message: String(execution.compileOutput || execution.stderr || execution.message || execution.statusDescription || "Compilation failed.")
-        });
-      }
-
-      const warningText = [execution.compileOutput, execution.stderr, execution.message]
-        .map((x) => String(x || "").trim())
-        .filter(Boolean)
-        .join("\n");
-
-      if (warningText) {
-        return res.json({
-          output: String(execution.stdout || "").trim(),
-          notes: warningText,
-          message: warningText
-        });
-      }
-
       return res.json({
-        output: String(execution.stdout || "").trim(),
-        notes: String(execution.statusDescription || "Run completed.")
+        output: String(preview.output || ""),
+        notes: String(preview.notes || "Run completed.")
       });
     } catch {
       return res.json({
@@ -407,26 +354,14 @@ router.post(
       });
     }
 
-    if (!process.env.JUDGE0_BASE_URL) {
-      return res.status(503).json({
-        message: "Submission is unavailable because Judge0 is not configured on the server."
-      });
-    }
-
     try {
-      const judgeResult = await evaluateWithJudge0({
-        sourceCode: code,
-        language: selectedLanguage,
-        testCases: assignedQuestion.testCases,
+      const judgeResult = await evaluateTestCasesWithAi({
         sourcePython: assignedQuestion.pythonCode,
+        userCode: code,
+        targetLanguage: selectedLanguage,
+        testCases: assignedQuestion.testCases,
         questionTitle: assignedQuestion.title
       });
-
-      if (judgeResult.evaluationMode === "judge0-required") {
-        return res.status(503).json({
-          message: judgeResult.runtimeError || "Submission failed because Judge0 evaluation is unavailable."
-        });
-      }
 
       const aiEvaluation = await evaluateWithAi({
         sourcePython: assignedQuestion.pythonCode,

@@ -271,7 +271,6 @@ Score ranges:
 
 export async function evaluateTestCasesWithAi({ sourcePython, userCode, targetLanguage, testCases, questionTitle = "" }) {
   const apiKey = process.env.API;
-
   if (!apiKey) {
     return {
       passed: 0,
@@ -354,6 +353,7 @@ Rules:
       prompt: `You are a strict testcase evaluator. Return only valid JSON.\n\n${prompt}`,
       timeoutMs: 45000
     });
+
     const normalizedDetails = (payload.details || []).slice(0, (testCases || []).length).map((item, index) => ({
       stdin: String(item.stdin ?? testCases[index]?.stdin ?? ""),
       expectedOutput: String(item.expectedOutput ?? testCases[index]?.expectedOutput ?? "").trim(),
@@ -417,6 +417,135 @@ Rules:
         languageWarnings: [],
         ioWarnings: []
       }
+    };
+  }
+}
+
+export async function compileWithAi({ sourcePython, userCode, targetLanguage, questionTitle = "" }) {
+  const apiKey = process.env.API;
+  const localMessages = [];
+  const trimmed = String(userCode || "").trim();
+
+  if (!trimmed) {
+    return { ok: false, messages: ["Code is empty."] };
+  }
+
+  if (!apiKey) {
+    return {
+      ok: false,
+      messages: ["API key not configured for compile analysis."]
+    };
+  }
+
+  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const prompt = `You are checking whether this translated solution is likely to compile for the selected language.
+
+Question title:
+${questionTitle}
+
+Source Python:
+${sourcePython}
+
+Target language:
+${targetLanguage}
+
+User code:
+${userCode}
+
+Return strict JSON only:
+{
+  "ok": true,
+  "messages": ["short compile messages"]
+}
+
+Rules:
+- Be strict.
+- If the code is clearly incomplete or syntactically invalid, set ok to false.
+- Keep messages short and concrete.`;
+
+  try {
+    const payload = await callGeminiJson({
+      apiKey,
+      model,
+      prompt: `You are a strict compile checker. Return only valid JSON.\n\n${prompt}`
+    });
+
+    const messages = Array.isArray(payload.messages) ? payload.messages.map((item) => String(item)) : [];
+    return {
+      ok: Boolean(payload.ok),
+      messages: messages.length ? messages : [payload.ok ? "Compile analysis passed." : "Compile analysis failed."]
+    };
+  } catch (error) {
+    localMessages.push(String(error.message || "Compile analysis failed").slice(0, 300));
+    return {
+      ok: false,
+      messages: localMessages
+    };
+  }
+}
+
+export async function runCodeWithAi({ sourcePython, userCode, targetLanguage, stdin = "", questionTitle = "" }) {
+  const apiKey = process.env.API;
+
+  if (!String(userCode || "").trim()) {
+    return {
+      output: "",
+      notes: "Code is empty."
+    };
+  }
+
+  if (!apiKey) {
+    return {
+      output: "",
+      notes: "API key not configured for run preview."
+    };
+  }
+
+  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const prompt = `You are simulating the output of the translated code for a run-preview feature.
+
+Question title:
+${questionTitle}
+
+Source Python:
+${sourcePython}
+
+Target language:
+${targetLanguage}
+
+User code:
+${userCode}
+
+stdin:
+${stdin}
+
+Return strict JSON only:
+{
+  "output": "predicted stdout exactly as the program would print",
+  "notes": "short note if there is uncertainty, likely bug, or runtime issue"
+}
+
+Rules:
+- Be conservative.
+- If the code appears incomplete or broken, output can be empty and notes should explain why.
+- Do not wrap JSON in markdown.`;
+
+  try {
+    const payload = await callGeminiJson({
+      apiKey,
+      model,
+      prompt: `You are a strict code execution simulator. Return only valid JSON.\n\n${prompt}`,
+      timeoutMs: 45000
+    });
+
+    return {
+      output: String(payload.output || "").trim(),
+      notes: String(payload.notes || "Run preview completed.")
+    };
+  } catch (error) {
+    return {
+      output: "",
+      notes: String(error.message || "Run preview failed").slice(0, 300)
     };
   }
 }
