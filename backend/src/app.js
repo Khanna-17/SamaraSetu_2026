@@ -24,14 +24,17 @@ export function createApp() {
   app.use(express.json({ limit: "1mb" }));
   app.use(morgan("dev"));
 
-  const limiter = rateLimit({
-    windowMs: 60 * 1000,
-    max: 5000,
-    standardHeaders: true,
-    legacyHeaders: false
-  });
+  const rateLimitDisabled = String(process.env.DISABLE_HTTP_RATE_LIMIT || "false").toLowerCase() === "true";
+  if (!rateLimitDisabled) {
+    const limiter = rateLimit({
+      windowMs: 60 * 1000,
+      max: Number(process.env.HTTP_RATE_LIMIT_MAX || 5000),
+      standardHeaders: true,
+      legacyHeaders: false
+    });
 
-  app.use(limiter);
+    app.use(limiter);
+  }
 
   app.get("/", (_req, res) => {
     res.status(200).send("Code Translation Arena server is running. Check /api/health for API status.");

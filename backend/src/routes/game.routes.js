@@ -202,6 +202,7 @@ router.post(
     if (!session || session.status !== "in-progress") {
       return res.status(404).json({ message: "Session not found" });
     }
+    const assignedQuestion = getQuestionById(session.assignedQuestion);
 
     const selectedLanguage = req.body.selectedLanguage;
     if (!isAllowedLanguage(selectedLanguage)) {
