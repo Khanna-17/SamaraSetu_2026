@@ -4,8 +4,8 @@
   "type": "module",
   "main": "src/index.js",
   "scripts": {
-    "dev": "node ../scripts/free-port.cjs 5000 && nodemon src/index.js",
-    "start": "node ../scripts/free-port.cjs 5000 && node src/index.js"
+    "dev": "nodemon src/index.js",
+    "start": "node src/index.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
